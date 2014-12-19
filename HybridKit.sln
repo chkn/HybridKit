@@ -1,0 +1,19 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "HybridKit", "HybridKit\HybridKit.shproj", "{AE0CCA6D-DB02-4038-A535-6888A8254733}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HybridKit.iOS", "HybridKit.iOS\HybridKit.iOS.csproj", "{C5EB2C53-904F-4A3E-80D7-2C8A35F9FAAF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C5EB2C53-904F-4A3E-80D7-2C8A35F9FAAF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C5EB2C53-904F-4A3E-80D7-2C8A35F9FAAF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C5EB2C53-904F-4A3E-80D7-2C8A35F9FAAF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C5EB2C53-904F-4A3E-80D7-2C8A35F9FAAF}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
