@@ -14,6 +14,10 @@ namespace HybridKit {
 
 		public ScriptObject (IWebViewInterface host, string script = "self")
 		{
+			if (host == null)
+				throw new ArgumentNullException ("host");
+			if (script == null)
+				throw new ArgumentNullException ("script");
 			this.host = host;
 			this.script = script;
 		}
@@ -30,6 +34,19 @@ namespace HybridKit {
 		public object Get (Type expectedType = null)
 		{
 			var result = host.Eval (MarshalOut (script));
+			return UnmarshalResult (result, expectedType);
+		}
+
+		/// <summary>
+		/// Sets the value of this instance to the specified value.
+		/// </summary>
+		/// <param name="value">Value.</param>
+		public object Set (object value, Type expectedType = null)
+		{
+			var sb = EditScript ().Append ('=');
+			MarshalIn (sb, value);
+			var s = MarshalOut (sb.ToString ());
+			var result = host.Eval (s);
 			return UnmarshalResult (result, expectedType);
 		}
 
@@ -76,7 +93,7 @@ namespace HybridKit {
 			switch (result.ScriptType) {
 
 			case ScriptType.Blittable:
-				return JSON.Parse (result.JsonValue, expectedType);
+				return result.JsonValue != null ? JSON.Parse (result.JsonValue, expectedType) : null;
 
 			case ScriptType.MarshalByRef:
 				return new ScriptObject (host, result.Script);
@@ -107,6 +124,7 @@ namespace HybridKit {
 
 		class ScriptMetaObject : DynamicMetaObject {
 
+			static readonly MethodInfo SetInfo = typeof (ScriptObject).GetMethod ("Set");
 			static readonly MethodInfo InvokeInfo = typeof (ScriptObject).GetMethod ("Invoke");
 
 			public new ScriptObject Value {
@@ -116,6 +134,11 @@ namespace HybridKit {
 			public ScriptMetaObject (Expression parameter, BindingRestrictions restrictions, ScriptObject value)
 				: base (parameter, restrictions, value)
 			{
+			}
+
+			public override DynamicMetaObject BindSetMember (SetMemberBinder binder, DynamicMetaObject value)
+			{
+				return SetValueResult (GetMemberScriptObject (binder.Name), binder.ReturnType, value);
 			}
 
 			public override DynamicMetaObject BindGetMember (GetMemberBinder binder)
@@ -135,17 +158,31 @@ namespace HybridKit {
 				return new ScriptObject (Value, script);
 			}
 
+			DynamicMetaObject SetValueResult (ScriptObject field, Type resultType, DynamicMetaObject value)
+			{
+				return new DynamicMetaObject (
+					Expression.Convert (
+						Expression.Call (
+							Expression.Constant (field, typeof (ScriptObject)),
+							SetInfo,
+							Expression.Convert (value.Expression, typeof (object)),
+							Expression.Constant (resultType, typeof (Type))
+						), resultType),
+					GetRestrictions ());
+			}
+
 			DynamicMetaObject InvokeResult (ScriptObject func, Type resultType, DynamicMetaObject [] args)
 			{
 				// First, convert args => object[]
 				var argExprs = Array.ConvertAll (args, dmo => Expression.Convert (dmo.Expression, typeof (object)));
 				return new DynamicMetaObject (
-					Expression.Call (
-						Expression.Constant (func, typeof (ScriptObject)),
-						InvokeInfo,
-						Expression.Constant (resultType, typeof (Type)),
-						Expression.NewArrayInit (typeof (object), argExprs)
-					),
+					Expression.Convert (
+						Expression.Call (
+							Expression.Constant (func, typeof (ScriptObject)),
+							InvokeInfo,
+							Expression.Constant (resultType, typeof (Type)),
+							Expression.NewArrayInit (typeof (object), argExprs)
+						), resultType),
 					GetRestrictions ());
 			}
 
