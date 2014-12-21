@@ -5,7 +5,7 @@ namespace HybridKit {
 
 	public interface IWebViewInterface {
 
-		string EvalJavaScript (string script);
+		string Eval (string script);
 	}
 }
 

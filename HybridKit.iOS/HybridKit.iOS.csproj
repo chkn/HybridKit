@@ -42,5 +42,6 @@
     <Compile Include="UIWebViewInterface.cs" />
   </ItemGroup>
   <Import Project="..\HybridKit\HybridKit.projitems" Label="Shared" Condition="Exists('..\HybridKit\HybridKit.projitems')" />
+  <Import Project="..\HybridKit.Apple\HybridKit.Apple.projitems" Label="Shared" Condition="Exists('..\HybridKit.Apple\HybridKit.Apple.projitems')" />
   <Import Project="$(MSBuildExtensionsPath)\Xamarin\iOS\Xamarin.iOS.CSharp.targets" />
 </Project>

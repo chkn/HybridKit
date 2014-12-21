@@ -1,0 +1,3 @@
+[submodule "HybridKit/JSON"]
+	path = HybridKit/JSON
+	url = https://github.com/chkn/JSON.cs.git
