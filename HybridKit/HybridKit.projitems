@@ -13,6 +13,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)IWebViewInterface.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)JSON\JSON.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HybridKit.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ScriptException.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="$(MSBuildThisFileDirectory)HybridKit.js" />

@@ -6,8 +6,9 @@ HybridKit = {
 	byRefObjects: { },
 
 	types: { //sync with ScriptType in HybridKit.cs
-		"blittable": 0, // can be fully represented by JSON.stringify
-		"marshalByRef": 1, // must be looked up in byRefObjects
+		"exception": 0, // indicates that the result is an exception thrown
+		"blittable": 1, // can be fully represented by JSON.stringify
+		"marshalByRef": 2, // must be looked up in byRefObjects
 	},
 
 	getType: function (obj) {
@@ -19,38 +20,57 @@ HybridKit = {
 		case "string":
 		case "boolean":
 			return this.types.blittable;
-
-		case "function":
-			return this.types.marshalByRef;
 		}
 		switch (obj.constructor.name) {
 		case "Number":
 		case "String":
 		case "Boolean":
 		case "Date":
+		case "Error":
 			return this.types.blittable;
 		}
-		//FIXME: is this logic correct?
-		// If the object has anything that isn't blittable, the object isn't blittable
-		for (var key in obj) {
-			if (this.getType(obj[key]) != this.types.blittable)
-				return this.types.marshalByRef;
-		}
-		return this.types.blittable;
+		return this.types.marshalByRef;
 	},
 
 	// called by ScriptObject.MarshalOut
-	marshalOut: function (obj) {
-		var type = this.getType (obj);
+	marshalOut: function (fn) {
+		var type, obj;
+		try {
+			obj = fn();
+			type = this.getType(obj);
+		} catch (e) {
+			obj = e;
+			type = this.types.exception;
+		}
 		var result = { "ScriptType": type };
-		if (type === this.types.blittable) {
+		switch (type) {
+
+		case this.types.blittable:
+		case this.types.exception:
 			result.JsonValue = JSON.stringify(obj);
-		} else if (type === this.types.marshalByRef) {
-			if (typeof obj.__byRefId === 'undefined')
-				obj.__byRefId = this.nextByRefId++;
-			this.byRefObjects[obj.__byRefId] = obj;
-			result.Script = "HybridKit.byRefObjects[" + obj.__byRefId + "]";
+			break;
+
+		case this.types.marshalByRef:
+			var byRefId = this.nextByRefId++;
+			this.byRefObjects[byRefId] = obj;
+			result.RefScript = "HybridKit.byRefObjects[" + byRefId + "]";
+			result.DisposeScript = "delete " + result.RefScript;
+			break;
 		}
 		return JSON.stringify(result);
 	}
 };
+
+// Make Error objects blittable, thanks to http://stackoverflow.com/a/18391400/578190
+Object.defineProperty(Error.prototype, 'toJSON', {
+    value: function () {
+        var alt = {};
+
+        Object.getOwnPropertyNames(this).forEach(function (key) {
+            alt[key] = this[key];
+        }, this);
+
+        return alt;
+    },
+    configurable: true
+});

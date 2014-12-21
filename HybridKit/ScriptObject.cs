@@ -9,23 +9,34 @@ namespace HybridKit {
 
 	class ScriptObject : IDynamicMetaObjectProvider {
 
+		ScriptObject parent; // need to hold ref to parent
 		IWebViewInterface host;
-		string script;
+		string refScript, disposeScript;
 
-		public ScriptObject (IWebViewInterface host, string script = "self")
+		internal ScriptObject (IWebViewInterface host, string refScript = "self", string disposeScript = null)
 		{
 			if (host == null)
 				throw new ArgumentNullException ("host");
-			if (script == null)
-				throw new ArgumentNullException ("script");
+			if (refScript == null)
+				throw new ArgumentNullException ("refScript");
 			this.host = host;
-			this.script = script;
+			this.refScript = refScript;
+			this.disposeScript = disposeScript;
+			//Console.WriteLine ("CREATING: {0}", refScript);
 		}
 
-		// Convenience
-		private ScriptObject (ScriptObject parent, StringBuilder newScript)
-			: this (parent.host, newScript.ToString ())
+		private ScriptObject (ScriptObject parent, string refScript)
+			: this (parent.host, refScript)
 		{
+			this.parent = parent;
+		}
+
+		~ScriptObject ()
+		{
+			if (disposeScript != null) {
+				//Console.WriteLine ("DISPOSING: {0}", disposeScript);
+				host.EvalOnMainThread (disposeScript);
+			}
 		}
 
 		/// <summary>
@@ -33,7 +44,7 @@ namespace HybridKit {
 		/// </summary>
 		public object Get (Type expectedType = null)
 		{
-			var result = host.Eval (MarshalOut (script));
+			var result = host.Eval (MarshalOut (refScript));
 			return UnmarshalResult (result, expectedType);
 		}
 
@@ -43,7 +54,7 @@ namespace HybridKit {
 		/// <param name="value">Value.</param>
 		public object Set (object value, Type expectedType = null)
 		{
-			var sb = EditScript ().Append ('=');
+			var sb = Ref ().Append ('=');
 			MarshalIn (sb, value);
 			var s = MarshalOut (sb.ToString ());
 			var result = host.Eval (s);
@@ -56,7 +67,7 @@ namespace HybridKit {
 		/// <param name="args">Arguments to the function invocation.</param>
 		public object Invoke (Type expectedType = null, params object [] args)
 		{
-			var sb = EditScript ().Append ('(');
+			var sb = Ref ().Append ('(');
 			var first = true;
 			foreach (var arg in args) {
 				if (!first)
@@ -72,14 +83,15 @@ namespace HybridKit {
 
 		public override string ToString ()
 		{
-			var s = EditScript ().Append (".toString()").ToString ();
-			return host.Eval (s);
+			var script = Ref ().Append (".toString()").ToString ();
+			var so = new ScriptObject (this, script);
+			return so.Get (typeof (string)).ToString ();
 		}
 
-		StringBuilder EditScript ()
+		StringBuilder Ref ()
 		{
 			var sb = new StringBuilder ();
-			sb.Append (script);
+			sb.Append (refScript);
 			return sb;
 		}
 
@@ -92,11 +104,14 @@ namespace HybridKit {
 			var result = JSON.Parse<MarshaledValue> (reader);
 			switch (result.ScriptType) {
 
+			case ScriptType.Exception:
+				throw new ScriptException (result.JsonValue);
+
 			case ScriptType.Blittable:
 				return result.JsonValue != null ? JSON.Parse (result.JsonValue, expectedType) : null;
 
 			case ScriptType.MarshalByRef:
-				return new ScriptObject (host, result.Script);
+				return new ScriptObject (host, result.RefScript, result.DisposeScript);
 			}
 			throw new Exception (string.Format ("Invalid ScriptType: {0}", result.ScriptType));
 		}
@@ -105,14 +120,14 @@ namespace HybridKit {
 		{
 			var so = obj as ScriptObject;
 			if (so != null)
-				buf.Append (so.script);
+				buf.Append (so.refScript);
 			else
 				JSON.Stringify (obj, buf);
 		}
 
 		static string MarshalOut (string script)
 		{
-			return string.Format ("HybridKit.marshalOut({0})", script);
+			return string.Format ("HybridKit.marshalOut(function(){{return {0}}})", script);
 		}
 
 		#region IDynamicMetaObjectProvider implementation
@@ -151,10 +166,15 @@ namespace HybridKit {
 				return InvokeResult (GetMemberScriptObject (binder.Name), binder.ReturnType, args);
 			}
 
+			public override DynamicMetaObject BindInvoke (InvokeBinder binder, DynamicMetaObject[] args)
+			{
+				return InvokeResult (Value, binder.ReturnType, args);
+			}
+
 			ScriptObject GetMemberScriptObject (string name)
 			{
 				// FIXME: Escape to Javascript allowed member names?
-				var script = Value.EditScript ().Append ('.').Append (name);
+				var script = Value.Ref ().Append ('.').Append (name).ToString ();
 				return new ScriptObject (Value, script);
 			}
 

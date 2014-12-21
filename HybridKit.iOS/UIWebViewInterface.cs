@@ -26,6 +26,11 @@ namespace HybridKit {
 		{
 			return webView.EvaluateJavascript (script);
 		}
+
+		public void EvalOnMainThread (string script)
+		{
+			webView.BeginInvokeOnMainThread (() => Eval (script));
+		}
 	}
 }
 
