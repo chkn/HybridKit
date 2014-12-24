@@ -9,6 +9,10 @@ namespace HybridKit {
 
 		readonly UIWebView webView;
 
+		public string CallbackRefScript {
+			get { return null; }
+		}
+
 		public UIWebViewInterface (UIWebView webView)
 		{
 			if (webView == null)

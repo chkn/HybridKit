@@ -14,4 +14,7 @@
   <ItemGroup>
     <Content Include="$(MSBuildThisFileDirectory)www\index.html" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)KitchenSink.cs" />
+  </ItemGroup>
 </Project>

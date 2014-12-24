@@ -33,9 +33,7 @@ namespace KitchenSink.iOS {
 		public void LoadingFinished (UIWebView webView)
 		{
 			var window = webView.GetGlobalObject ();
-			var node = window.document.createTextNode("Hello from HybridKit!");
-			window.document.body.appendChild (node);
-			window.alert ("Hello from C#!");
+			KitchenSink.CallJavaScript (window);
 		}
 
 		[Export ("webView:shouldStartLoadWithRequest:navigationType:")]

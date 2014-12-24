@@ -125,9 +125,13 @@ namespace HybridKit {
 				JSON.Stringify (obj, buf);
 		}
 
-		static string MarshalOut (string script)
+		string MarshalOut (string script)
 		{
-			return string.Format ("HybridKit.marshalOut(function(){{return {0}}})", script);
+			var marshalScript = "HybridKit.marshalOut(function(){return " + script + "})";
+			var callback = host.CallbackRefScript;
+			if (!string.IsNullOrEmpty (callback))
+				marshalScript = callback + "(" + marshalScript + ")";
+			return marshalScript;
 		}
 
 		#region IDynamicMetaObjectProvider implementation
