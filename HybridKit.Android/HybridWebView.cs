@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 
 using Android.Webkit;
 using Android.Content;
@@ -22,6 +23,28 @@ namespace HybridKit {
 			base.SetWebViewClient (hybridClient);
 		}
 
+		/// <summary>
+		/// Runs the specified script, possibly asynchronously.
+		/// </summary>
+		/// <remarks>
+		/// This method may dispatch to a different thread to run the passed lambda.
+		/// </remarks>
+		/// <param name="script">A lambda that interacts with the passed JavaScript global object.</param>
+		public Task RunScriptAsync (ScriptLambda script)
+		{
+			// This simply ensures we're not running on the UI thread..
+			Action closure = () => script (GetGlobalObject ());
+			return Task.Run (closure);
+		}
+
+		/// <summary>
+		/// Gets the JavaScript global window object.
+		/// </summary>
+		/// <remarks>
+		/// On iOS, all calls into JavaScript must be done from the main UI thread.
+		/// On Android, calls must NOT be made on the main UI thread. Any other thread is acceptable.
+		/// </remarks>
+		/// <returns>The global object.</returns>
 		public dynamic GetGlobalObject ()
 		{
 			return new ScriptObject (webViewInterface);

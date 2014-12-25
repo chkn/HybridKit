@@ -6,7 +6,7 @@ using Foundation;
 
 namespace HybridKit {
 
-	public class BundleCacheFile {
+	class BundleCacheFile {
 
 		public string BundleRelativePath { get; private set; }
 		public string MimeType { get; private set; }
@@ -34,7 +34,7 @@ namespace HybridKit {
 		}
 	}
 
-	public class BundleCache : NSUrlCache {
+	class BundleCache : NSUrlCache {
 
 		IDictionary<string,BundleCacheFile> urlToBundleFiles;
 

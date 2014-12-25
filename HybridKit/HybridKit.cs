@@ -21,5 +21,7 @@ namespace HybridKit {
 		public string RefScript { get; set; } // script to ref MarshalByRef types
 		public string DisposeScript { get; set; } // script to release references on MarshalByRef types
 	}
+
+	public delegate void ScriptLambda (dynamic window);
 }
 

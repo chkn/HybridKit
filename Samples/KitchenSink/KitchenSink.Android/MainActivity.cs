@@ -27,30 +27,18 @@ namespace KitchenSink.Android
 			webView.Settings.JavaScriptEnabled = true;
 			webView.Settings.JavaScriptCanOpenWindowsAutomatically = true;
 			webView.SetWebChromeClient (new WebChromeClient ());
-			webView.SetWebViewClient (new Client (this));
+			webView.SetWebViewClient (new Client ());
 
 			webView.LoadUrl ("file:///android_asset/index.html");
 		}
 
 		class Client : WebViewClient {
 
-			MainActivity parent;
-
-			public Client (MainActivity parent)
-			{
-				this.parent = parent;
-			}
-
-			public override void OnPageFinished (WebView view, string url)
+			public override async void OnPageFinished (WebView view, string url)
 			{
 				base.OnPageFinished (view, url);
-
-				// We cannot call JavaScript from within one of this class's callbacks.
-				//  Use a handler to defer the call until slightly later.
-				ThreadPool.QueueUserWorkItem (_ => {
-					var window = parent.webView.GetGlobalObject ();
-					KitchenSink.CallJavaScript (window);
-				});
+				await ((HybridWebView)view).RunScriptAsync (KitchenSink.CallJavaScript);
+				Console.WriteLine ("Script finished!");
 			}
 		}
 	}

@@ -6,9 +6,17 @@ namespace KitchenSink {
 
 		public static void CallJavaScript (dynamic window)
 		{
-			var node = window.document.createTextNode("Hello from HybridKit!");
-			window.document.body.appendChild (node);
-			window.alert ("Hello from C#!");
+			var document = window.document;
+
+			var name = window.prompt ("What is your name?") ?? "World";
+			var node = document.createTextNode (string.Format ("Hello {0} from C#!", name));
+			document.body.appendChild (node);
+
+			try {
+				window.doesNotExist ();
+			} catch (Exception e) {
+				Console.WriteLine ("Example of catching JavaScript exception: {0}", e);
+			}
 		}
 	}
 }

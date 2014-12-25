@@ -5,7 +5,7 @@ using UIKit;
 
 namespace HybridKit {
 
-	public class UIWebViewInterface : IWebViewInterface {
+	class UIWebViewInterface : IWebViewInterface {
 
 		readonly UIWebView webView;
 

@@ -30,10 +30,10 @@ namespace KitchenSink.iOS {
 		
 
 		[Export ("webViewDidFinishLoad:")]
-		public void LoadingFinished (UIWebView webView)
+		public async void LoadingFinished (UIWebView webView)
 		{
-			var window = webView.GetGlobalObject ();
-			KitchenSink.CallJavaScript (window);
+			await webView.RunScriptAsync (KitchenSink.CallJavaScript);
+			Console.WriteLine ("Script finished!");
 		}
 
 		[Export ("webView:shouldStartLoadWithRequest:navigationType:")]
