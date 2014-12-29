@@ -47,13 +47,16 @@ namespace HybridKit {
 		/// </remarks>
 		/// <returns>The global object.</returns>
 		/// <param name="webView">Web view.</param>
-		public static dynamic GetGlobalObject (this UIWebView webView)
+		static dynamic GetGlobalObject (this UIWebView webView)
 		{
 			return new ScriptObject (new UIWebViewInterface (webView));
 		}
 
-		// This is an additional, undocumented API that may change in the future:
-
+		/// <summary>
+		/// Loads a page from the app bundle into the <c>WebView</c>.
+		/// </summary>
+		/// <param name="webView">Web view in which to load the page.</param>
+		/// <param name="bundleRelativePath">Bundle-relative path of the page to load.</param>
 		public static void LoadFromBundle (this UIWebView webView, string bundleRelativePath)
 		{
 			var url = BundleCache.GetBundleUrl (bundleRelativePath);

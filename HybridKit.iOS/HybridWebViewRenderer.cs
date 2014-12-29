@@ -12,7 +12,7 @@ namespace HybridKit.Forms {
 
 	public class HybridWebViewRenderer : WebViewRenderer, IHybridWebViewRenderer {
 
-		public static void Init ()
+		public static new void Init ()
 		{
 			// Keeps us from being linked out.
 		}

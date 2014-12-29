@@ -63,6 +63,7 @@
     <Compile Include="WebViewInterface.cs" />
     <Compile Include="HybridWebView.cs" />
     <Compile Include="HybridWebViewRenderer.cs" />
+    <Compile Include="WebViewExtensions.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\AboutResources.txt" />

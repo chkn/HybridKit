@@ -32,7 +32,7 @@ namespace HybridKit.Forms {
 		{
 			return Device.OnPlatform<string> (
 				iOS: iOS_GetBundleUrl?.Invoke (null, new object[] { bundleUrl })?.ToString (),
-				Android: "file:///android_asset/" + bundleUrl,
+				Android: HybridKit.AndroidAssetPrefix + bundleUrl,
 				WinPhone: null // not supported
 			);
 		}

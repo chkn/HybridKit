@@ -48,7 +48,7 @@ namespace HybridKit.Android {
 		/// On Android, calls must NOT be made on the main UI thread. Any other thread is acceptable.
 		/// </remarks>
 		/// <returns>The global object.</returns>
-		public dynamic GetGlobalObject ()
+		dynamic GetGlobalObject ()
 		{
 			return new ScriptObject (webViewInterface);
 		}

@@ -4,6 +4,8 @@ namespace HybridKit {
 	static class HybridKit {
 
 		public const string Magic = "hybridkit1";
+
+		internal const string AndroidAssetPrefix = "file:///android_asset/";
 	}
 
 	enum ScriptType {

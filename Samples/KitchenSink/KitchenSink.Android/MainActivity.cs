@@ -24,7 +24,7 @@ namespace KitchenSink {
 			webView.SetWebChromeClient (new WebChromeClient ());
 			webView.SetWebViewClient (new Client ());
 
-			webView.LoadUrl ("file:///android_asset/index.html");
+			webView.LoadFromBundle ("index.html");
 		}
 
 		class Client : WebViewClient {

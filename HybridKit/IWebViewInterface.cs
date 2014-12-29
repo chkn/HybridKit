@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 
 namespace HybridKit {
 
-	public interface IWebViewInterface {
+	interface IWebViewInterface {
 
 		/// <summary>
 		/// Gets the script to reference the callback function, if one is needed.
