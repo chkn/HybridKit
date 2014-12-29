@@ -6,7 +6,7 @@
     <ProjectTypeGuids>{EFBA0AD7-5A72-4C68-AF49-83D382785DCF};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <ProjectGuid>{05AE86B5-2157-40E0-B37B-D735A2CE4821}</ProjectGuid>
     <OutputType>Library</OutputType>
-    <RootNamespace>KitchenSink.Android</RootNamespace>
+    <RootNamespace>KitchenSink</RootNamespace>
     <MonoAndroidAssetsPrefix>Assets</MonoAndroidAssetsPrefix>
     <MonoAndroidResourcePrefix>Resources</MonoAndroidResourcePrefix>
     <AndroidResgenClass>Resource</AndroidResgenClass>
@@ -68,6 +68,10 @@
     <ProjectReference Include="..\..\..\HybridKit.Android\HybridKit.Android.csproj">
       <Project>{FF565BA2-92F8-487B-AA5E-C0B175DA28B7}</Project>
       <Name>HybridKit.Android</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\HybridKit\HybridKit.csproj">
+      <Project>{D62F445D-B668-417A-AEF2-D91E63C2CDE5}</Project>
+      <Name>HybridKit</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>

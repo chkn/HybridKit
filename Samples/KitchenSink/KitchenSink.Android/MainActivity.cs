@@ -1,29 +1,24 @@
 ﻿using System;
-using System.Threading;
 
-using Android.App;
-using Android.Content;
-using Android.Runtime;
-using Android.Views;
-using Android.Widget;
-using Android.Webkit;
 using Android.OS;
+using Android.App;
+using Android.Webkit;
 
-using HybridKit;
+using HybridKit.Android;
 
-namespace KitchenSink.Android
-{
+namespace KitchenSink {
+
 	[Activity (Label = "KitchenSink", MainLauncher = true, Icon = "@drawable/icon")]
-	public class MainActivity : Activity
-	{
+	public class MainActivity : Activity {
+
 		HybridWebView webView;
 
 		protected override void OnCreate (Bundle bundle)
 		{
 			base.OnCreate (bundle);
 			webView = new HybridWebView (this);
-			SetContentView (webView);
 
+			SetContentView (webView);
 			webView.Settings.JavaScriptEnabled = true;
 			webView.Settings.JavaScriptCanOpenWindowsAutomatically = true;
 			webView.SetWebChromeClient (new WebChromeClient ());

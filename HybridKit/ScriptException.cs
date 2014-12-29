@@ -6,7 +6,7 @@ namespace HybridKit {
 
 	public class ScriptException : Exception {
 
-		static readonly FieldInfo RemoteStackTraceString = typeof (Exception).GetField ("_remoteStackTraceString", BindingFlags.Instance | BindingFlags.NonPublic);
+		static readonly FieldInfo RemoteStackTraceString = typeof (Exception).GetTypeInfo ().GetDeclaredField ("_remoteStackTraceString");
 
 		internal ScriptException (string json)
 			: this (json != null ? JSON.Parse<Dictionary<string,string>> (json) : null)

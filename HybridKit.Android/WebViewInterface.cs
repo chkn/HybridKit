@@ -10,7 +10,7 @@ using Android.Webkit;
 using Android.App;
 using Android.OS;
 
-namespace HybridKit {
+namespace HybridKit.Android {
 
 	class WebViewInterface : Java.Lang.Object, IWebViewInterface {
 
@@ -36,7 +36,7 @@ namespace HybridKit {
 
 		internal void LoadHelperScript ()
 		{
-			using (var reader = new StreamReader (typeof(WebViewInterface).Assembly.GetManifestResourceStream ("HybridKit.HybridKit.js")))
+			using (var reader = new StreamReader (typeof (HybridKit).Assembly.GetManifestResourceStream ("HybridKit.HybridKit.js")))
 				EvalNoResult (reader.ReadToEnd ());
 		}
 

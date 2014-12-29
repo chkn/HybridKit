@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 
 namespace KitchenSink {
 
@@ -15,7 +16,7 @@ namespace KitchenSink {
 			try {
 				window.doesNotExist ();
 			} catch (Exception e) {
-				Console.WriteLine ("Example of catching JavaScript exception: {0}", e);
+				Debug.WriteLine ("Example of catching JavaScript exception: {0}", e);
 			}
 		}
 	}

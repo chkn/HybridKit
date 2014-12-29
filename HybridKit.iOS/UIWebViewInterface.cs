@@ -21,7 +21,7 @@ namespace HybridKit {
 
 			// Ensure we've loaded HybridKit.js
 			if (webView.EvaluateJavascript ("HybridKit.magic") != HybridKit.Magic) {
-				using (var reader = new StreamReader (typeof(UIWebViewInterface).Assembly.GetManifestResourceStream ("HybridKit.HybridKit.js")))
+				using (var reader = new StreamReader (typeof (HybridKit).Assembly.GetManifestResourceStream ("HybridKit.HybridKit.js")))
 					webView.EvaluateJavascript (reader.ReadToEnd ());
 			}
 		}

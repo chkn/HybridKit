@@ -57,6 +57,7 @@ namespace HybridKit {
 				NSUrlRequest.FromUrl (file.LocalUrl) : request;
 		}
 
+		// Referenced by BundleWebViewSource.cs
 		public static NSUrl GetBundleUrl (string bundleRelativePath)
 		{
 			var fileName = Path.GetFileNameWithoutExtension (bundleRelativePath);

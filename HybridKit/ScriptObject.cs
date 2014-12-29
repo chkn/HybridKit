@@ -116,6 +116,9 @@ namespace HybridKit {
 			throw new Exception (string.Format ("Invalid ScriptType: {0}", result.ScriptType));
 		}
 
+		/// <summary>
+		/// Marshals a value that is passed into JavaScript.
+		/// </summary>
 		static void MarshalIn (StringBuilder buf, object obj)
 		{
 			var so = obj as ScriptObject;
@@ -125,6 +128,9 @@ namespace HybridKit {
 				JSON.Stringify (obj, buf);
 		}
 
+		/// <summary>
+		/// Marshals a value that is received from JavaScript.
+		/// </summary>
 		string MarshalOut (string script)
 		{
 			var marshalScript = "HybridKit.marshalOut(function(){return " + script + "})";
@@ -143,8 +149,15 @@ namespace HybridKit {
 
 		class ScriptMetaObject : DynamicMetaObject {
 
-			static readonly MethodInfo SetInfo = typeof (ScriptObject).GetMethod ("Set");
-			static readonly MethodInfo InvokeInfo = typeof (ScriptObject).GetMethod ("Invoke");
+			static readonly MethodInfo SetInfo;
+			static readonly MethodInfo InvokeInfo;
+
+			static ScriptMetaObject ()
+			{
+				var typeInfo = typeof (ScriptObject).GetTypeInfo ();
+				SetInfo = typeInfo.GetDeclaredMethod ("Set");
+				InvokeInfo = typeInfo.GetDeclaredMethod ("Invoke");
+			}
 
 			public new ScriptObject Value {
 				get { return (ScriptObject)base.Value; }
@@ -197,8 +210,9 @@ namespace HybridKit {
 
 			DynamicMetaObject InvokeResult (ScriptObject func, Type resultType, DynamicMetaObject [] args)
 			{
-				// First, convert args => object[]
-				var argExprs = Array.ConvertAll (args, dmo => Expression.Convert (dmo.Expression, typeof (object)));
+				var argExprs = new Expression [args.Length];
+				for (var i = 0; i < args.Length; i++)
+					argExprs [i] = Expression.Convert (args [i].Expression, typeof (object));
 				return new DynamicMetaObject (
 					Expression.Convert (
 						Expression.Call (

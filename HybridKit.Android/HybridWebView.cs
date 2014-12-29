@@ -1,16 +1,19 @@
 ﻿using System;
 using System.Threading.Tasks;
 
-using Android.Webkit;
-using Android.Content;
+using Android.OS;
 using Android.App;
+using Android.Views;
+using Android.Webkit;
+using Android.Graphics;
+using Android.Net.Http;
 
-namespace HybridKit {
+namespace HybridKit.Android {
 
 	public class HybridWebView : WebView {
 
-		HybridClient hybridClient;
-		WebViewInterface webViewInterface;
+		readonly HybridClient hybridClient;
+		readonly WebViewInterface webViewInterface;
 
 		internal bool IsInWebClientFrame {
 			get { return hybridClient.IsInWebClientFrame; }
@@ -87,7 +90,7 @@ namespace HybridKit {
 				}
 			}
 
-			public override void OnFormResubmission (WebView view, Android.OS.Message dontResend, Android.OS.Message resend)
+			public override void OnFormResubmission (WebView view, Message dontResend, Message resend)
 			{
 				IsInWebClientFrame = true;
 				try {
@@ -127,7 +130,7 @@ namespace HybridKit {
 				}
 			}
 
-			public override void OnPageStarted (WebView view, string url, Android.Graphics.Bitmap favicon)
+			public override void OnPageStarted (WebView view, string url, Bitmap favicon)
 			{
 				IsInWebClientFrame = true;
 				try {
@@ -179,7 +182,7 @@ namespace HybridKit {
 				}
 			}
 
-			public override void OnReceivedSslError (WebView view, SslErrorHandler handler, Android.Net.Http.SslError error)
+			public override void OnReceivedSslError (WebView view, SslErrorHandler handler, SslError error)
 			{
 				IsInWebClientFrame = true;
 				try {
@@ -205,7 +208,7 @@ namespace HybridKit {
 				}
 			}
 
-			public override void OnTooManyRedirects (WebView view, Android.OS.Message cancelMsg, Android.OS.Message continueMsg)
+			public override void OnTooManyRedirects (WebView view, Message cancelMsg, Message continueMsg)
 			{
 				IsInWebClientFrame = true;
 				try {
@@ -218,7 +221,7 @@ namespace HybridKit {
 				}
 			}
 
-			public override void OnUnhandledKeyEvent (WebView view, Android.Views.KeyEvent e)
+			public override void OnUnhandledKeyEvent (WebView view, KeyEvent e)
 			{
 				IsInWebClientFrame = true;
 				try {
@@ -241,7 +244,7 @@ namespace HybridKit {
 				}
 			}
 
-			public override bool ShouldOverrideKeyEvent (WebView view, Android.Views.KeyEvent e)
+			public override bool ShouldOverrideKeyEvent (WebView view, KeyEvent e)
 			{
 				IsInWebClientFrame = true;
 				try {
