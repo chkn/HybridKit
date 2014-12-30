@@ -4,6 +4,7 @@ using System.Text;
 using System.Dynamic;
 using System.Reflection;
 using System.Linq.Expressions;
+using System.Xml.Serialization;
 
 namespace HybridKit {
 
@@ -50,6 +51,7 @@ namespace HybridKit {
 		/// <summary>
 		/// Gets the value of this instance.
 		/// </summary>
+		[XmlPreserve]
 		public object Get (Type expectedType = null)
 		{
 			var result = host.Eval (MarshalOut (refScript));
@@ -60,6 +62,7 @@ namespace HybridKit {
 		/// Sets the value of this instance to the specified value.
 		/// </summary>
 		/// <param name="value">Value.</param>
+		[XmlPreserve]
 		public object Set (object value, Type expectedType = null)
 		{
 			var sb = Ref ().Append ('=');
@@ -73,6 +76,7 @@ namespace HybridKit {
 		/// Invokes this instance representing a JavaScript function.
 		/// </summary>
 		/// <param name="args">Arguments to the function invocation.</param>
+		[XmlPreserve]
 		public object Invoke (Type expectedType = null, params object [] args)
 		{
 			var sb = Ref ().Append ('(');

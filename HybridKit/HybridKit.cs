@@ -1,6 +1,16 @@
 ﻿using System;
 
+// HACK: Provide an attribute to prevent certain members from being linked out
+namespace System.Xml.Serialization {
+	class XmlPreserveAttribute : Attribute {
+	}
+}
+
 namespace HybridKit {
+	using System.Xml.Serialization;
+
+	public delegate void ScriptLambda (dynamic window);
+
 	static class HybridKit {
 
 		public const string Magic = "hybridkit1";
@@ -16,14 +26,14 @@ namespace HybridKit {
 
 	struct MarshaledValue {
 
-		public ScriptType ScriptType { get; set; }
+		[XmlPreserve] public ScriptType ScriptType { get; set; }
 
 		// Only one of these will be set depending on ScriptType:
-		public string JsonValue { get; set; } // for blittable types
-		public string RefScript { get; set; } // script to ref MarshalByRef types
-		public string DisposeScript { get; set; } // script to release references on MarshalByRef types
+		[XmlPreserve] public string JsonValue { get; set; } // for blittable types
+		[XmlPreserve] public string RefScript { get; set; } // script to ref MarshalByRef types
+		[XmlPreserve] public string DisposeScript { get; set; } // script to release references on MarshalByRef types
 	}
-
-	public delegate void ScriptLambda (dynamic window);
 }
+
+
 
