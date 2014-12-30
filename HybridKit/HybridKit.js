@@ -7,19 +7,19 @@ HybridKit = {
 
 	types: { //sync with ScriptType in HybridKit.cs
 		"exception": 0, // indicates that the result is an exception thrown
-		"blittable": 1, // can be fully represented by JSON.stringify
+		"marshalByVal": 1, // can be fully represented by JSON.stringify
 		"marshalByRef": 2, // must be looked up in byRefObjects
 	},
 
 	getType: function (obj) {
 		if (obj == null)
-			return this.types.blittable;
+			return this.types.marshalByVal;
 		switch (typeof obj) {
 		case "undefined":
 		case "number":
 		case "string":
 		case "boolean":
-			return this.types.blittable;
+			return this.types.marshalByVal;
 		}
 		switch (obj.constructor.name) {
 		case "Number":
@@ -27,7 +27,7 @@ HybridKit = {
 		case "Boolean":
 		case "Date":
 		case "Error":
-			return this.types.blittable;
+			return this.types.marshalByVal;
 		}
 		return this.types.marshalByRef;
 	},
@@ -45,8 +45,8 @@ HybridKit = {
 		var result = { "ScriptType": type };
 		switch (type) {
 
-		case this.types.blittable:
 		case this.types.exception:
+		case this.types.marshalByVal:
 			result.JsonValue = JSON.stringify(obj);
 			break;
 

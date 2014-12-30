@@ -9,7 +9,15 @@ namespace HybridKit {
 
 	class ScriptObject : IDynamicMetaObjectProvider {
 
-		ScriptObject parent; // need to hold ref to parent
+		#pragma warning disable 414
+
+		// Disable warning that this field is set but never used.
+		// We need to keep a ref to the parent object to prevent it
+		//  from being prematurely deleted from the byRefObjects hash
+		ScriptObject parent;
+
+		#pragma warning restore 414
+
 		IWebViewInterface host;
 		string refScript, disposeScript;
 
@@ -107,7 +115,7 @@ namespace HybridKit {
 			case ScriptType.Exception:
 				throw new ScriptException (result.JsonValue);
 
-			case ScriptType.Blittable:
+			case ScriptType.MarshalByVal:
 				return result.JsonValue != null ? JSON.Parse (result.JsonValue, expectedType) : null;
 
 			case ScriptType.MarshalByRef:

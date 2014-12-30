@@ -10,7 +10,7 @@ namespace HybridKit {
 
 	enum ScriptType {
 		Exception = 0,
-		Blittable = 1,
+		MarshalByVal = 1,
 		MarshalByRef = 2
 	}
 
