@@ -19,14 +19,14 @@ Simple C# – JavaScript bridge for building hybrid iOS and Android apps.
 
 To start utilizing HybridKit, follow the steps below:
 
-1. Add HybridKit to your app.
+1. Add HybridKit to your app. [NuGet](https://www.nuget.org/packages/Xam.Plugin.HybridKit) is the recommended way to do this.
 2. Add the following references to your project:
 	+ `Microsoft.CSharp`
+	+ `Xamarin.Forms` (currently required, even if your project does not use it.)
 	+ For Android only:
-		- `Mono.Android.Export`
-		- `Xamarin.Forms` (currently required, even if your project does not use it.)
+		- `Mono.Android.Export`	
 
-Note that for Xamarin.Forms, HybridKit currently requires Xamarin.Forms 1.3.1 or later. At this time, you need to select `Show pre-release packages` in the NuGet gallery to install this on your project.
+HybridKit currently requires Xamarin.Forms 1.3.1 or later. If you install HybridKit through NuGet, it will install an appropriate version for you automatically. 
 
 ## Create the Web View
 
@@ -54,7 +54,7 @@ webView.Settings.JavaScriptEnabled = true;
 
 ### Xamarin.Forms
 
-When using [Xamarin.Forms](http://xamarin.com/forms) on iOS or Android , create a new `HybridKit.Forms.HybridWebView`, which extends from `Xamarin.Forms.WebView`:
+When using [Xamarin.Forms](http://xamarin.com/forms) on iOS or Android, create a new `HybridKit.Forms.HybridWebView`, which extends from `Xamarin.Forms.WebView`:
 
 ```
 using HybridKit.Forms;
