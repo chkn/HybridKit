@@ -127,6 +127,10 @@ await webView.RunScriptAsync (window => {
 await webView.RunScriptAsync (_ => Console.WriteLine (foo));
 ```
 
-# Current Status
+# Development
 
 This project is brand new, so expect bugs. Feedback and contributions are always welcome!
+
+## Running the Unit Tests
+
+Run the `HybridKit.Tests.Android` or `HybridKit.Tests.iOS` projects to run the tests on Android or iOS, respectively. Currently, the Android tests deadlock due to the test harness blocking the UI thread.
