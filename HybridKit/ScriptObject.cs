@@ -8,7 +8,7 @@ using System.Xml.Serialization;
 
 namespace HybridKit {
 
-	class ScriptObject : IDynamicMetaObjectProvider {
+	public sealed class ScriptObject : IDynamicMetaObjectProvider {
 
 		#pragma warning disable 414
 
@@ -152,6 +152,35 @@ namespace HybridKit {
 			return marshalScript;
 		}
 
+		#region Equality
+
+		public override bool Equals (object obj)
+		{
+			return obj == this;
+		}
+
+		// FIXME: Preliminary implementation
+		public static bool operator == (object other, ScriptObject obj)
+		{
+			if (object.ReferenceEquals (obj, other))
+				return true;
+			if (object.ReferenceEquals (obj, null))
+				return other == null;
+
+			// FIXME: Don't depend on other's Type!
+			var value = obj.Get (other?.GetType ());
+			if (value == null)
+				return other == null;
+
+			return value.Equals (other);
+		}
+		public static bool operator != (object other, ScriptObject obj)
+		{
+			return !(other == obj);
+		}
+
+		#endregion
+
 		#region IDynamicMetaObjectProvider implementation
 
 		DynamicMetaObject IDynamicMetaObjectProvider.GetMetaObject (Expression parameter)
@@ -161,14 +190,18 @@ namespace HybridKit {
 
 		class ScriptMetaObject : DynamicMetaObject {
 
+			static readonly MethodInfo GetInfo;
 			static readonly MethodInfo SetInfo;
 			static readonly MethodInfo InvokeInfo;
+			static readonly MethodInfo EqualsInfo;
 
 			static ScriptMetaObject ()
 			{
 				var typeInfo = typeof (ScriptObject).GetTypeInfo ();
+				GetInfo = typeInfo.GetDeclaredMethod ("Get");
 				SetInfo = typeInfo.GetDeclaredMethod ("Set");
 				InvokeInfo = typeInfo.GetDeclaredMethod ("Invoke");
+				EqualsInfo = typeInfo.GetDeclaredMethod ("Equals");
 			}
 
 			public new ScriptObject Value {
@@ -200,6 +233,21 @@ namespace HybridKit {
 				return InvokeResult (Value, binder.ReturnType, args);
 			}
 
+			public override DynamicMetaObject BindConvert (ConvertBinder binder)
+			{
+				return GetValueResult (Value, binder.Type);
+			}
+
+			public override DynamicMetaObject BindBinaryOperation (BinaryOperationBinder binder, DynamicMetaObject arg)
+			{
+				switch (binder.Operation) {
+
+				case ExpressionType.Equal:
+					return EqualsResult (Value, binder.ReturnType, arg);
+				}
+				throw new NotImplementedException (binder.Operation.ToString ());
+			}
+
 			ScriptObject GetMemberScriptObject (string name)
 			{
 				// FIXME: Escape to Javascript allowed member names?
@@ -207,15 +255,39 @@ namespace HybridKit {
 				return new ScriptObject (Value, script);
 			}
 
+			DynamicMetaObject GetValueResult (ScriptObject field, Type resultType)
+			{
+				return new DynamicMetaObject (
+					AddConvertIfNeeded (
+						Expression.Call (
+							Expression.Constant (field, typeof (ScriptObject)),
+							GetInfo,
+							Expression.Constant (resultType, typeof (Type))
+						), resultType),
+					GetRestrictions ());
+			}
+
 			DynamicMetaObject SetValueResult (ScriptObject field, Type resultType, DynamicMetaObject value)
 			{
 				return new DynamicMetaObject (
-					Expression.Convert (
+					AddConvertIfNeeded (
 						Expression.Call (
 							Expression.Constant (field, typeof (ScriptObject)),
 							SetInfo,
 							Expression.Convert (value.Expression, typeof (object)),
 							Expression.Constant (resultType, typeof (Type))
+						), resultType),
+					GetRestrictions ());
+			}
+
+			DynamicMetaObject EqualsResult (ScriptObject field, Type resultType, DynamicMetaObject value)
+			{
+				return new DynamicMetaObject (
+					AddConvertIfNeeded (
+						Expression.Call (
+							Expression.Constant (field, typeof (ScriptObject)),
+							EqualsInfo,
+							Expression.Convert (value.Expression, typeof (object))
 						), resultType),
 					GetRestrictions ());
 			}
@@ -226,7 +298,7 @@ namespace HybridKit {
 				for (var i = 0; i < args.Length; i++)
 					argExprs [i] = Expression.Convert (args [i].Expression, typeof (object));
 				return new DynamicMetaObject (
-					Expression.Convert (
+					AddConvertIfNeeded (
 						Expression.Call (
 							Expression.Constant (func, typeof (ScriptObject)),
 							InvokeInfo,
@@ -244,6 +316,11 @@ namespace HybridKit {
 			BindingRestrictions GetRestrictions ()
 			{
 				return BindingRestrictions.GetTypeRestriction (Expression, LimitType);
+			}
+
+			static Expression AddConvertIfNeeded (Expression expr, Type resultType)
+			{
+				return expr.Type != resultType ? Expression.Convert (expr, resultType) : expr;
 			}
 		}
 
