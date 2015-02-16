@@ -29,7 +29,7 @@ namespace HybridKit {
 		[XmlPreserve] public ScriptType ScriptType { get; set; }
 
 		// Only one of these will be set depending on ScriptType:
-		[XmlPreserve] public string JsonValue { get; set; } // for blittable types
+		[XmlPreserve] public object Value { get; set; } // for blittable types
 		[XmlPreserve] public string RefScript { get; set; } // script to ref MarshalByRef types
 		[XmlPreserve] public string DisposeScript { get; set; } // script to release references on MarshalByRef types
 	}

@@ -47,7 +47,7 @@ HybridKit = {
 
 		case this.types.exception:
 		case this.types.marshalByVal:
-			result.JsonValue = JSON.stringify(obj);
+			result.Value = obj;
 			break;
 
 		case this.types.marshalByRef:
@@ -58,6 +58,10 @@ HybridKit = {
 			break;
 		}
 		return JSON.stringify(result);
+	},
+
+	toString: function (obj) {
+		return (obj != null) ? obj.toString() : null;
 	}
 };
 

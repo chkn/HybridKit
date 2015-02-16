@@ -5,6 +5,7 @@ using System.Dynamic;
 using System.Reflection;
 using System.Linq.Expressions;
 using System.Xml.Serialization;
+using System.Collections.Generic;
 
 namespace HybridKit {
 
@@ -54,8 +55,7 @@ namespace HybridKit {
 		[XmlPreserve]
 		public object Get (Type expectedType = null)
 		{
-			var result = host.Eval (MarshalOut (refScript));
-			return UnmarshalResult (result, expectedType);
+			return Eval (refScript, expectedType);
 		}
 
 		/// <summary>
@@ -67,9 +67,7 @@ namespace HybridKit {
 		{
 			var sb = Ref ().Append ('=');
 			MarshalIn (sb, value);
-			var s = MarshalOut (sb.ToString ());
-			var result = host.Eval (s);
-			return UnmarshalResult (result, expectedType);
+			return Eval (sb.ToString (), expectedType);
 		}
 
 		/// <summary>
@@ -88,16 +86,13 @@ namespace HybridKit {
 					first = false;
 				MarshalIn (sb, arg);
 			}
-			var s = MarshalOut (sb.Append (')').ToString ());
-			var result = host.Eval (s);
-			return UnmarshalResult (result, expectedType);
+			sb.Append (')');
+			return Eval (sb.ToString (), expectedType);
 		}
 
 		public override string ToString ()
 		{
-			var script = Ref ().Append (".toString()").ToString ();
-			var so = new ScriptObject (this, script);
-			return so.Get (typeof (string)).ToString ();
+			return Eval ("HybridKit.toString(" + refScript + ")", typeof (string))?.ToString ();
 		}
 
 		StringBuilder Ref ()
@@ -105,6 +100,12 @@ namespace HybridKit {
 			var sb = new StringBuilder ();
 			sb.Append (refScript);
 			return sb;
+		}
+
+		object Eval (string script, Type expectedType = null)
+		{
+			var result = host.Eval (MarshalOut (script));
+			return UnmarshalResult (result, expectedType);
 		}
 
 		object UnmarshalResult (string result, Type expectedType = null)
@@ -117,10 +118,10 @@ namespace HybridKit {
 			switch (result.ScriptType) {
 
 			case ScriptType.Exception:
-				throw new ScriptException (result.JsonValue);
+				throw new ScriptException ((IDictionary<string,object>)result.Value);
 
 			case ScriptType.MarshalByVal:
-				return result.JsonValue != null ? JSON.Parse (result.JsonValue, expectedType) : null;
+				return JSON.Convert (result.Value, expectedType);
 
 			case ScriptType.MarshalByRef:
 				return new ScriptObject (host, result.RefScript, result.DisposeScript);
@@ -213,14 +214,19 @@ namespace HybridKit {
 			{
 			}
 
-			public override DynamicMetaObject BindSetMember (SetMemberBinder binder, DynamicMetaObject value)
+			public override DynamicMetaObject BindConvert (ConvertBinder binder)
 			{
-				return SetValueResult (GetMemberScriptObject (binder.Name), binder.ReturnType, value);
+				return GetValueResult (Value, binder.Type);
 			}
 
 			public override DynamicMetaObject BindGetMember (GetMemberBinder binder)
 			{
-				return ConstantResult (GetMemberScriptObject (binder.Name));
+				return GetValueResult (GetMemberScriptObject (binder.Name), binder.ReturnType);
+			}
+
+			public override DynamicMetaObject BindSetMember (SetMemberBinder binder, DynamicMetaObject value)
+			{
+				return SetValueResult (GetMemberScriptObject (binder.Name), binder.ReturnType, value);
 			}
 
 			public override DynamicMetaObject BindInvokeMember (InvokeMemberBinder binder, DynamicMetaObject[] args)
@@ -231,11 +237,6 @@ namespace HybridKit {
 			public override DynamicMetaObject BindInvoke (InvokeBinder binder, DynamicMetaObject[] args)
 			{
 				return InvokeResult (Value, binder.ReturnType, args);
-			}
-
-			public override DynamicMetaObject BindConvert (ConvertBinder binder)
-			{
-				return GetValueResult (Value, binder.Type);
 			}
 
 			public override DynamicMetaObject BindBinaryOperation (BinaryOperationBinder binder, DynamicMetaObject arg)
@@ -306,11 +307,6 @@ namespace HybridKit {
 							Expression.NewArrayInit (typeof (object), argExprs)
 						), resultType),
 					GetRestrictions ());
-			}
-
-			DynamicMetaObject ConstantResult (ScriptObject value)
-			{
-				return new DynamicMetaObject (Expression.Constant (value, typeof (ScriptObject)), GetRestrictions (), value);
 			}
 
 			BindingRestrictions GetRestrictions ()

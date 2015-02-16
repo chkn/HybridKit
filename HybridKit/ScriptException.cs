@@ -9,17 +9,17 @@ namespace HybridKit {
 		static readonly FieldInfo RemoteStackTraceString = typeof (Exception).GetTypeInfo ().GetDeclaredField ("_remoteStackTraceString");
 
 		internal ScriptException (string json)
-			: this (json != null ? JSON.Parse<Dictionary<string,string>> (json) : null)
+			: this (json != null ? JSON.Parse<Dictionary<string,object>> (json) : null)
 		{
 		}
 
-		internal ScriptException (IDictionary<string,string> errorDict)
-			: base (errorDict != null ? errorDict ["message"] : "An unknown error occurred while executing a script")
+		internal ScriptException (IDictionary<string,object> errorDict)
+			: base (errorDict != null ? errorDict ["message"].ToString () : "An unknown error occurred while executing a script")
 		{
 			// Hack to add JS stack trace to the exception..
-			string trace;
+			object trace;
 			if (errorDict != null && RemoteStackTraceString != null && errorDict.TryGetValue ("stack", out trace))
-				RemoteStackTraceString.SetValue (this, Environment.NewLine + trace);
+				RemoteStackTraceString.SetValue (this, Environment.NewLine + trace.ToString ());
 		}
 	}
 }

@@ -9,14 +9,27 @@ namespace HybridKit.Tests {
 	public class CallJavaScriptTests : TestBase {
 
 		[Test]
+		public async Task SetGetGlobalNull ()
+		{
+			await WebView.RunScriptAsync (window => {
+				window.foo = null;
+				Assert.AreEqual (null, window.foo, "#1");
+				Assert.AreEqual (null, (string)window.foo, "#2");
+				Assert.IsTrue (window.foo == null, "#3");
+				Assert.IsTrue (null == window.foo, "#4");
+			});
+		}
+
+		[Test]
 		public async Task SetGetGlobalString ()
 		{
 			await WebView.RunScriptAsync (window => {
 				window.foo = "bazbong";
-				Assert.AreEqual ("bazbong", window.foo.toString (), "#1");
-				Assert.AreEqual ("bazbong", (string)window.foo, "#2");
-				Assert.IsTrue (window.foo == "bazbong", "#3");
-				Assert.IsTrue ("bazbong" == window.foo, "#4");
+				Assert.AreEqual ("bazbong", window.foo, "#1");
+				Assert.AreEqual ("bazbong", window.foo.ToString (), "#2");
+				Assert.AreEqual ("bazbong", (string)window.foo, "#3");
+				Assert.IsTrue (window.foo == "bazbong", "#4");
+				Assert.IsTrue ("bazbong" == window.foo, "#5");
 			});
 		}
 
@@ -25,12 +38,13 @@ namespace HybridKit.Tests {
 		{
 			await WebView.RunScriptAsync (window => {
 				window.foo = 10;
-				Assert.AreEqual (10, (int)window.foo, "#1");
-				Assert.IsTrue (10 == window.foo, "#2");
-				Assert.IsTrue (window.foo == 10, "#3");
+				Assert.AreEqual (10, window.foo, "#1");
+				Assert.AreEqual (10, (int)window.foo, "#2");
+				Assert.IsTrue (10 == window.foo, "#3");
+				Assert.IsTrue (window.foo == 10, "#4");
 
 				var bar = window.foo + 5;
-				Assert.AreEqual (15, bar, "#2");
+				Assert.AreEqual (15, bar, "#5");
 			});
 		}
 
