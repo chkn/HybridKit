@@ -133,4 +133,5 @@ This project is brand new, so expect bugs. Feedback and contributions are always
 
 ## Running the Unit Tests
 
-Run the `HybridKit.Tests.Android` or `HybridKit.Tests.iOS` projects to run the tests on Android or iOS, respectively. Currently, the Android tests deadlock due to the test harness blocking the UI thread.
+Run the `HybridKit.Tests.Android` or `HybridKit.Tests.iOS` projects to run the tests on Android or iOS, respectively. Currently, the Android tests can only be run on Android Jellybean or earlier. To fix this, we either need a better workaround for [this Android bug](https://code.google.com/p/android/issues/detail?id=79924) (please upvote!) or a test runner that does not block the main thread during async tests.
+

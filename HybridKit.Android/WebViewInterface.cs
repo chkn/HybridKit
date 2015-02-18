@@ -12,9 +12,7 @@ using Android.OS;
 
 namespace HybridKit.Android {
 
-	class WebViewInterface : Java.Lang.Object, IWebViewInterface {
-
-		static readonly bool IsKitKatOrNewer = (int)Build.VERSION.SdkInt >= (int)BuildVersionCodes.Kitkat;
+	sealed class WebViewInterface : Java.Lang.Object, IWebViewInterface {
 
 		readonly object evalLock;
 		readonly HybridWebView webView;
@@ -42,27 +40,32 @@ namespace HybridKit.Android {
 
 		void EvalNoResult (string script)
 		{
-			if (IsKitKatOrNewer) {
-				webView.EvaluateJavascript (script, null);
-			} else {
+			if (HybridWebView.IsJellybeanOrOlder) {
 				var uri = "javascript:" + script;
 				webView.LoadUrl (uri);
+			} else {
+				webView.EvaluateJavascript (script, null);
 			}
 		}
 
 		public string Eval (string script)
 		{
 			lock (evalLock) {
-				// FIXME: We'll probably need this to be reentrant when we expose C# to JS.
 				if (resultTcs != null)
 					throw new InvalidOperationException ("Eval already in progress for this WebView.");
 				if (webView.IsInWebClientFrame)
 					throw new InvalidOperationException ("Cannot call Eval within WebViewClient callback.");
-				if (Looper.MyLooper () == Looper.MainLooper)
-					throw new InvalidOperationException ("Cannot call Eval on the main thread.");
+
+				var isMainThread = Looper.MyLooper () == Looper.MainLooper;
+				if (isMainThread && !webView.CanRunScriptOnMainThread)
+					throw new InvalidOperationException ("Cannot call Eval on the main thread in this Android version.");
+
 				resultTcs = new TaskCompletionSource<string> ();
 				try {
-					dispatchActivity.RunOnUiThread (() => EvalNoResult (script));
+					if (isMainThread)
+						EvalNoResult (script);
+					else
+						dispatchActivity.RunOnUiThread (() => EvalNoResult (script));
 					return resultTcs.Task.Result;
 				} finally {
 					resultTcs = null;
@@ -72,8 +75,7 @@ namespace HybridKit.Android {
 
 		public void EvalOnMainThread (string script)
 		{
-			// For Android, we actually don't want to use the main thread :(
-			Eval (script);
+			dispatchActivity.RunOnUiThread (() => EvalNoResult (script));
 		}
 
 		[Export, JavascriptInterface]

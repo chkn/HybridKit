@@ -12,11 +12,17 @@ namespace HybridKit.Android {
 
 	public class HybridWebView : WebView {
 
+		internal static readonly bool IsJellybeanOrOlder = (int)Build.VERSION.SdkInt < (int)BuildVersionCodes.Kitkat;
+
 		readonly HybridClient hybridClient;
 		readonly WebViewInterface webViewInterface;
 
 		internal bool IsInWebClientFrame {
 			get { return hybridClient.IsInWebClientFrame; }
+		}
+
+		internal bool CanRunScriptOnMainThread {
+			get { return IsJellybeanOrOlder && !IsInWebClientFrame; }
 		}
 
 		public HybridWebView (Activity context): base (context)
@@ -35,9 +41,14 @@ namespace HybridKit.Android {
 		/// <param name="script">A lambda that interacts with the passed JavaScript global object.</param>
 		public Task RunScriptAsync (ScriptLambda script)
 		{
-			// This simply ensures we're not running on the UI thread..
-			Action closure = () => script (GetGlobalObject ());
-			return Task.Run (closure);
+			if (CanRunScriptOnMainThread) {
+				script (GetGlobalObject ());
+				return Task.FromResult<object> (null);
+			} else {
+				// This simply ensures we're not running on the UI thread..
+				Action closure = () => script (GetGlobalObject ());
+				return Task.Run (closure);
+			}
 		}
 
 		/// <summary>

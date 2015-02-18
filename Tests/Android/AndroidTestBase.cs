@@ -1,21 +1,17 @@
 ﻿using System;
-using NUnit.Framework;
+using System.Threading.Tasks;
 
 using Android.App;
 
-using HybridKit.Android;
+using NUnit.Framework;
 
+using HybridKit.Android;
 
 namespace HybridKit.Tests {
 
 	public abstract partial class TestBase {
 
-		internal static Activity Context {
-			get;
-			set;
-		}
-
-		protected HybridWebView WebView {
+		protected internal static HybridWebView WebView {
 			get;
 			set;
 		}
@@ -23,8 +19,6 @@ namespace HybridKit.Tests {
 		[SetUp]
 		public void BaseSetup ()
 		{
-			WebView = new HybridWebView (Context);
-			WebView.Settings.JavaScriptEnabled = true;
 			Setup ();
 		}
 	}

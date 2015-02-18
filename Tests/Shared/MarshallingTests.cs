@@ -6,7 +6,7 @@ using NUnit.Framework;
 namespace HybridKit.Tests {
 
 	[TestFixture]
-	public class CallJavaScriptTests : TestBase {
+	public class MarshallingTests : TestBase {
 
 		[Test]
 		public async Task SetGetGlobalNull ()
@@ -30,6 +30,8 @@ namespace HybridKit.Tests {
 				Assert.AreEqual ("bazbong", (string)window.foo, "#3");
 				Assert.IsTrue (window.foo == "bazbong", "#4");
 				Assert.IsTrue ("bazbong" == window.foo, "#5");
+				Assert.IsTrue (window.foo.Equals ("bazbong"), "#6");
+				Assert.IsTrue ("bazbong".Equals (window.foo), "#7");
 			});
 		}
 
@@ -42,9 +44,43 @@ namespace HybridKit.Tests {
 				Assert.AreEqual (10, (int)window.foo, "#2");
 				Assert.IsTrue (10 == window.foo, "#3");
 				Assert.IsTrue (window.foo == 10, "#4");
+				Assert.IsTrue (window.foo.Equals (10), "#5");
+				Assert.IsTrue (10d.Equals (window.foo), "#6");
 
 				var bar = window.foo + 5;
-				Assert.AreEqual (15, bar, "#5");
+				Assert.AreEqual (15, bar, "#7");
+			});
+		}
+
+		[Test]
+		public async Task SetGetGlobalBool ()
+		{
+			await WebView.RunScriptAsync (window => {
+				window.foo = true;
+				Assert.AreEqual (true, window.foo, "#1");
+				Assert.IsTrue (window.foo, "#2");
+				Assert.IsTrue (true == window.foo, "#3");
+				Assert.IsTrue (window.foo == true, "#4");
+				Assert.IsTrue (window.foo.Equals (true), "#5");
+				Assert.IsTrue (true.Equals (window.foo), "#6");
+
+				var bar = !window.foo;
+				Assert.IsFalse (bar, "#7");
+			});
+		}
+
+		[Test]
+		public async Task SetGetPoco ()
+		{
+			await WebView.RunScriptAsync (window => {
+				window.foo = new {
+					Foo = "foo",
+					Bar = 122.5,
+					Baz = true
+				};
+				Assert.AreEqual ("foo", window.foo.Foo, "#1");
+				Assert.AreEqual (122.5, window.foo.Bar, "#2");
+				Assert.AreEqual (true, window.foo.Baz, "#3");
 			});
 		}
 

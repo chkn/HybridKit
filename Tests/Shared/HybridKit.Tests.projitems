@@ -9,7 +9,7 @@
     <Import_RootNamespace>HybridKit.Tests</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)CallJavaScriptTests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)TestBase.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MarshallingTests.cs" />
   </ItemGroup>
 </Project>

@@ -1,13 +1,15 @@
-﻿using System.Reflection;
+﻿using System;
+using System.Reflection;
+using System.Threading.Tasks;
 
-using Android.App;
 using Android.OS;
+using Android.App;
+using Android.Webkit;
+using Android.Content;
+
 using Xamarin.Android.NUnitLite;
 
-using Xamarin.Forms;
-using Xamarin.Forms.Platform.Android;
-
-using HybridKit.Forms;
+using HybridKit.Android;
 
 namespace HybridKit.Tests.Android
 {
@@ -16,7 +18,25 @@ namespace HybridKit.Tests.Android
 	{
 		protected override void OnCreate (Bundle bundle)
 		{
-			TestBase.Context = this;
+			if ((int)Build.VERSION.SdkInt >= (int)BuildVersionCodes.Kitkat) {
+				var dlg = new AlertDialog.Builder (this);
+				dlg.SetTitle ("Deadlock!");
+				dlg.SetMessage ("WARNING: These tests currently deadlock on Android KitKat or newer (which you are currently using)");
+				dlg.SetPositiveButton ("OK", (IDialogInterfaceOnClickListener)null);
+				dlg.SetNegativeButton ("More Info", delegate {
+					StartActivity (new Intent (Intent.ActionDefault,
+						global::Android.Net.Uri.Parse ("https://code.google.com/p/android/issues/detail?id=79924")));
+				});
+				dlg.Create ().Show ();
+			}
+
+			// Setup web view
+			//FIXME: Recreate the web view before every test
+			var webView = new HybridWebView (this);
+			webView.Settings.JavaScriptEnabled = true;
+			webView.LoadUrl ("about:blank");
+
+			TestBase.WebView = webView;
 
 			// tests can be inside the main assembly
 			AddTest (Assembly.GetExecutingAssembly ());

@@ -65,13 +65,15 @@ HybridKit = {
 	}
 };
 
-// Make Error objects blittable, thanks to http://stackoverflow.com/a/18391400/578190
+// Make Error objects blittable, thanks in part to http://stackoverflow.com/a/18391400/578190
 Object.defineProperty(Error.prototype, 'toJSON', {
     value: function () {
         var alt = {};
 
         Object.getOwnPropertyNames(this).forEach(function (key) {
-            alt[key] = this[key];
+            var val = this[key];
+            if (val != this && HybridKit.getType(val) === HybridKit.types.marshalByVal)
+	            alt[key] = val;
         }, this);
 
         return alt;
