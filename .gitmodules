@@ -1,3 +1,6 @@
 [submodule "HybridKit/JSON"]
 	path = HybridKit/JSON
 	url = https://github.com/chkn/JSON.cs.git
+[submodule "Tests/guiunit"]
+	path = Tests/guiunit
+	url = https://github.com/chkn/guiunit.git

@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Threading.Tasks;
+
 using NUnit.Framework;
 
 using UIKit;
@@ -8,16 +10,22 @@ namespace HybridKit.Tests {
 
 	public abstract partial class TestBase {
 
-		protected UIWebView WebView {
+		protected UIWebView NativeWebView {
 			get;
 			set;
 		}
 
-		[SetUp]
-		public void BaseSetup ()
+		protected void LoadHtml (string html)
 		{
-			WebView = new UIWebView ();
-			Setup ();
+			NativeWebView.LoadHtmlString (html, null);
+		}
+
+		[SetUp]
+		public async Task BaseSetup ()
+		{
+			NativeWebView = new UIWebView ();
+			WebView = NativeWebView.AsHybridWebView ();
+			await Setup ();
 		}
 	}
 }

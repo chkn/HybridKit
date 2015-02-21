@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Threading.Tasks;
 
 using Android.App;
 
@@ -14,7 +13,7 @@ using AndroidWebViewClient = Android.Webkit.WebViewClient;
 
 namespace HybridKit.Forms {
 
-	public class HybridWebViewRenderer : WebViewRenderer, IHybridWebViewRenderer {
+	public class HybridWebViewRenderer : WebViewRenderer {
 
 		static Type webClientType;
 
@@ -42,17 +41,8 @@ namespace HybridKit.Forms {
 			SetNativeControl (hybridWebView);
 
 			base.OnElementChanged (e);
-			((HybridWebView)e.NewElement).Renderer = this;
+			((HybridWebView)e.NewElement).Native = hybridWebView;
 		}
-
-		#region IHybridWebViewRenderer implementation
-
-		public Task RunScriptAsync (ScriptLambda script)
-		{
-			return ((AndroidHybridWebView)Control).RunScriptAsync (script);
-		}
-
-		#endregion
 	}
 }
 

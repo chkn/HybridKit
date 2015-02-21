@@ -1,11 +1,22 @@
 ﻿using System;
 using System.IO;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices;
 
 using UIKit;
 using Foundation;
+using ObjCRuntime;
 
 namespace HybridKit {
+
+	enum ObjcAssociationPolicy
+	{
+		Assign = 0,
+		RetainNonatomic = 1,
+		CopyNonatomic = 3,
+		Retain = 01401,
+		Copy = 01403
+	};
 
 	public static class UIWebViewExtensions {
 
@@ -13,43 +24,23 @@ namespace HybridKit {
 		/// Runs the specified script, possibly asynchronously.
 		/// </summary>
 		/// <remarks>
+		/// This method is a convenience for: <code>webView.AsHybridWebView ().RunScriptAsync (script)</code>
 		/// This method may dispatch to a different thread to run the passed lambda.
 		/// </remarks>
 		/// <param name="webView">The Web View in which to run the script.</param>
 		/// <param name="script">A lambda that interacts with the passed JavaScript global object.</param>
 		public static Task RunScriptAsync (this UIWebView webView, ScriptLambda script)
 		{
-			var tcs = new TaskCompletionSource<object> ();
-			Action closure = () => {
-				try {
-					script (webView.GetGlobalObject ());
-					tcs.TrySetResult (null);
-				} catch (Exception e) {
-					tcs.TrySetException (e);
-				}
-			};
-			// We must execute synchronously if already on the main thread,
-			//  otherwise a Wait() on the returned task would deadlock trying to
-			//  dispatch back to the main thread while it's blocking on the Wait().
-			if (NSThread.IsMain)
-				closure ();
-			else
-				webView.BeginInvokeOnMainThread (closure);
-			return tcs.Task;
+			return webView.AsHybridWebView ().RunScriptAsync (script);
 		}
 
 		/// <summary>
-		/// Gets the JavaScript global window object.
+		/// Returns an <c>IWebView</c> interface for the given <c>UIWebView</c>.
 		/// </summary>
-		/// <remarks>
-		/// On iOS, all calls into JavaScript must be done from the main UI thread.
-		/// On Android, calls must NOT be made on the main UI thread. Any other thread is acceptable.
-		/// </remarks>
-		/// <returns>The global object.</returns>
-		/// <param name="webView">Web view.</param>
-		static dynamic GetGlobalObject (this UIWebView webView)
+		/// <param name="webView">Web view for which to return the <c>IWebView</c>.</param>
+		public static IWebView AsHybridWebView (this UIWebView webView)
 		{
-			return new ScriptObject (new UIWebViewInterface (webView));
+			return webView.GetInterface ();
 		}
 
 		/// <summary>
@@ -65,6 +56,31 @@ namespace HybridKit {
 			var req = NSUrlRequest.FromUrl (url);
 			webView.LoadRequest (req);
 		}
+
+		internal static UIWebViewInterface GetInterface (this UIWebView webView)
+		{
+			// First, see if we've already created an interface for this webView
+			var existing = webView.GetAssociatedObject (UIWebViewInterface.Key.Handle) as UIWebViewInterface;
+			return existing ?? new UIWebViewInterface (webView);
+		}
+
+		internal static void SetAssociatedObject (this NSObject obj, IntPtr key, NSObject value, ObjcAssociationPolicy policy = ObjcAssociationPolicy.RetainNonatomic)
+		{
+			objc_setAssociatedObject (obj.Handle, key, value.Handle, policy);
+			GC.KeepAlive (value);
+			GC.KeepAlive (obj);
+		}
+		internal static NSObject GetAssociatedObject (this NSObject obj, IntPtr key)
+		{
+			var result = Runtime.GetNSObject (objc_getAssociatedObject (obj.Handle, key));
+			GC.KeepAlive (obj);
+			return result;
+		}
+
+		[DllImport (Constants.ObjectiveCLibrary)]
+		static extern void objc_setAssociatedObject (IntPtr obj, IntPtr key, IntPtr value, ObjcAssociationPolicy policy);
+		[DllImport (Constants.ObjectiveCLibrary)]
+		static extern IntPtr objc_getAssociatedObject (IntPtr obj, IntPtr key); 
 	}
 }
 

@@ -5,15 +5,20 @@ using Xamarin.Forms;
 
 namespace HybridKit.Forms {
 
-	interface IHybridWebViewRenderer {
-		Task RunScriptAsync (ScriptLambda script);
-	}
+	public class HybridWebView : WebView, IWebView {
 
-	public class HybridWebView : WebView {
-
-		internal IHybridWebViewRenderer Renderer {
+		internal IWebView Native {
 			get;
 			set;
+		}
+
+		public CachedResources Cache {
+			get { return Native.Cache; }
+		}
+
+		event EventHandler IWebView.Loaded {
+			add { Native.Loaded += value; }
+			remove { Native.Loaded -= value; }
 		}
 
 		/// <summary>
@@ -25,7 +30,7 @@ namespace HybridKit.Forms {
 		/// <param name="script">A lambda that interacts with the passed JavaScript global object.</param>
 		public Task RunScriptAsync (ScriptLambda script)
 		{
-			return Renderer.RunScriptAsync (script);
+			return Native.RunScriptAsync (script);
 		}
 	}
 }

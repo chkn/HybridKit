@@ -60,10 +60,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Resources\Resource.designer.cs" />
-    <Compile Include="WebViewInterface.cs" />
     <Compile Include="HybridWebView.cs" />
     <Compile Include="HybridWebViewRenderer.cs" />
     <Compile Include="WebViewExtensions.cs" />
+    <Compile Include="WebViewScriptEvaluator.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\AboutResources.txt" />

@@ -42,7 +42,6 @@
     <Reference Include="System.Xml" />
     <Reference Include="System.Core" />
     <Reference Include="Mono.Android" />
-    <Reference Include="Xamarin.Android.NUnitLite" />
     <Reference Include="Xamarin.Android.Support.v4">
       <HintPath>..\..\packages\Xamarin.Android.Support.v4.21.0.3.0\lib\MonoAndroid10\Xamarin.Android.Support.v4.dll</HintPath>
     </Reference>
@@ -90,6 +89,10 @@
     <ProjectReference Include="..\..\HybridKit.Android\HybridKit.Android.csproj">
       <Project>{FF565BA2-92F8-487B-AA5E-C0B175DA28B7}</Project>
       <Name>HybridKit.Android</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\guiunit\src\framework\GuiUnit_Android\GuiUnit_Android.csproj">
+      <Project>{C33A73F1-1CEC-4550-97B9-E7571E9AF4E6}</Project>
+      <Name>GuiUnit_Android</Name>
     </ProjectReference>
   </ItemGroup>
 </Project>

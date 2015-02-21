@@ -12,24 +12,23 @@ using Android.OS;
 
 namespace HybridKit.Android {
 
-	sealed class WebViewInterface : Java.Lang.Object, IWebViewInterface {
+	sealed class WebViewScriptEvaluator : Java.Lang.Object, IScriptEvaluator {
+
+		const string CallbackGlobalObject = "HybridKit_CallbackHandler";
+		const string CallbackMethod = nameof(PostEvalResult);
+		const string Callback = CallbackGlobalObject + "." + CallbackMethod;
 
 		readonly object evalLock;
 		readonly HybridWebView webView;
 		readonly Activity dispatchActivity;
 		TaskCompletionSource<string> resultTcs;
 
-
-		public string CallbackRefScript {
-			get { return "HybridKit_CallbackHandler.PostEvalResult"; }
-		}
-
-		public WebViewInterface (HybridWebView webView)
+		public WebViewScriptEvaluator (HybridWebView webView)
 		{
 			this.evalLock = new object ();
 			this.webView = webView;
 			this.dispatchActivity = (Activity)webView.Context;
-			webView.AddJavascriptInterface (this, "HybridKit_CallbackHandler");
+			webView.AddJavascriptInterface (this, CallbackGlobalObject);
 		}
 
 		internal void LoadHelperScript ()
@@ -60,6 +59,7 @@ namespace HybridKit.Android {
 				if (isMainThread && !webView.CanRunScriptOnMainThread)
 					throw new InvalidOperationException ("Cannot call Eval on the main thread in this Android version.");
 
+				script = Callback + "(" + script + ")";
 				resultTcs = new TaskCompletionSource<string> ();
 				try {
 					if (isMainThread)

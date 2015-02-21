@@ -20,10 +20,10 @@ namespace HybridKit {
 
 		#pragma warning restore 414
 
-		IWebViewInterface host;
+		IScriptEvaluator host;
 		string refScript, disposeScript;
 
-		internal ScriptObject (IWebViewInterface host, string refScript = "self", string disposeScript = null)
+		internal ScriptObject (IScriptEvaluator host, string refScript = "self", string disposeScript = null)
 		{
 			if (host == null)
 				throw new ArgumentNullException ("host");
@@ -144,13 +144,9 @@ namespace HybridKit {
 		/// <summary>
 		/// Marshals a value that is received from JavaScript.
 		/// </summary>
-		string MarshalOut (string script)
+		static string MarshalOut (string script)
 		{
-			var marshalScript = "HybridKit.marshalOut(function(){return " + script + "})";
-			var callback = host.CallbackRefScript;
-			if (!string.IsNullOrEmpty (callback))
-				marshalScript = callback + "(" + marshalScript + ")";
-			return marshalScript;
+			return "HybridKit.marshalOut(function(){return " + script + "})";
 		}
 
 		#region Equality
@@ -275,7 +271,7 @@ namespace HybridKit {
 						Expression.Call (
 							Expression.Constant (field, typeof (ScriptObject)),
 							SetInfo,
-							Expression.Convert (value.Expression, typeof (object)),
+							AddConvertIfNeeded (value.Expression, typeof (object)),
 							Expression.Constant (resultType, typeof (Type))
 						), resultType),
 					GetRestrictions ());
@@ -288,7 +284,7 @@ namespace HybridKit {
 						Expression.Call (
 							Expression.Constant (field, typeof (ScriptObject)),
 							EqualsInfo,
-							Expression.Convert (value.Expression, typeof (object))
+							AddConvertIfNeeded (value.Expression, typeof (object))
 						), resultType),
 					GetRestrictions ());
 			}

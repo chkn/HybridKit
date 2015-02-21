@@ -10,7 +10,7 @@ using Xamarin.Forms.Platform.iOS;
 
 namespace HybridKit.Forms {
 
-	public class HybridWebViewRenderer : WebViewRenderer, IHybridWebViewRenderer {
+	public class HybridWebViewRenderer : WebViewRenderer {
 
 		public static new void Init ()
 		{
@@ -20,17 +20,8 @@ namespace HybridKit.Forms {
 		protected override void OnElementChanged (VisualElementChangedEventArgs e)
 		{
 			base.OnElementChanged (e);
-			((HybridWebView)e.NewElement).Renderer = this;
+			((HybridWebView)e.NewElement).Native = ((UIWebView)NativeView).AsHybridWebView ();
 		}
-
-		#region IHybridWebViewRenderer implementation
-
-		public Task RunScriptAsync (ScriptLambda script)
-		{
-			return ((UIWebView)NativeView).RunScriptAsync (script);
-		}
-
-		#endregion
 	}
 }
 

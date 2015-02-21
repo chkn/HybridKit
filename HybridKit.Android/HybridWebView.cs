@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 using Android.OS;
 using Android.App;
@@ -10,12 +11,21 @@ using Android.Net.Http;
 
 namespace HybridKit.Android {
 
-	public class HybridWebView : WebView {
+	public class HybridWebView : WebView, IWebView {
 
 		internal static readonly bool IsJellybeanOrOlder = (int)Build.VERSION.SdkInt < (int)BuildVersionCodes.Kitkat;
 
 		readonly HybridClient hybridClient;
-		readonly WebViewInterface webViewInterface;
+		readonly WebViewScriptEvaluator evaluator;
+
+		public event EventHandler Loaded {
+			add { hybridClient.Loaded += value; }
+			remove { hybridClient.Loaded -= value; }
+		}
+
+		public CachedResources Cache {
+			get { return hybridClient.Cache; }
+		}
 
 		internal bool IsInWebClientFrame {
 			get { return hybridClient.IsInWebClientFrame; }
@@ -28,7 +38,8 @@ namespace HybridKit.Android {
 		public HybridWebView (Activity context): base (context)
 		{
 			this.hybridClient = new HybridClient (this);
-			this.webViewInterface = new WebViewInterface (this);
+			this.evaluator = new WebViewScriptEvaluator (this);
+
 			base.SetWebViewClient (hybridClient);
 		}
 
@@ -59,9 +70,9 @@ namespace HybridKit.Android {
 		/// On Android, calls must NOT be made on the main UI thread. Any other thread is acceptable.
 		/// </remarks>
 		/// <returns>The global object.</returns>
-		dynamic GetGlobalObject ()
+		ScriptObject GetGlobalObject ()
 		{
-			return new ScriptObject (webViewInterface);
+			return new ScriptObject (evaluator);
 		}
 
 		public override void SetWebViewClient (WebViewClient client)
@@ -69,13 +80,20 @@ namespace HybridKit.Android {
 			hybridClient.BaseClient = client;
 		}
 
-		class HybridClient : WebViewClient {
+		sealed class HybridClient : WebViewClient {
 
-			HybridWebView parent;
+			readonly HybridWebView parent;
+
+			public event EventHandler Loaded;
 
 			public WebViewClient BaseClient {
 				get;
 				set;
+			}
+
+			public CachedResources Cache {
+				get;
+				private set;
 			}
 
 			public bool IsInWebClientFrame {
@@ -86,6 +104,7 @@ namespace HybridKit.Android {
 			public HybridClient (HybridWebView parent)
 			{
 				this.parent = parent;
+				this.Cache = new CachedResources ();
 			}
 
 			public override void DoUpdateVisitedHistory (WebView view, string url, bool isReload)
@@ -129,9 +148,12 @@ namespace HybridKit.Android {
 
 			public override void OnPageFinished (WebView view, string url)
 			{
-				parent.webViewInterface.LoadHelperScript ();
+				parent.evaluator.LoadHelperScript ();
 				IsInWebClientFrame = true;
 				try {
+					var loaded = Loaded;
+					if (loaded != null)
+						loaded (this, EventArgs.Empty);
 					if (BaseClient != null)
 						BaseClient.OnPageFinished (view, url);
 					else
@@ -249,7 +271,16 @@ namespace HybridKit.Android {
 			{
 				IsInWebClientFrame = true;
 				try {
-					return BaseClient != null ? BaseClient.ShouldInterceptRequest (view, url) : base.ShouldInterceptRequest (view, url);
+					WebResourceResponse result = null;
+					if (BaseClient != null)
+						result = BaseClient.ShouldInterceptRequest (view, url);
+					if (result == null) {
+						// See if any of our cached resources match..
+						var cached = Cache.GetCached (url);
+						if (cached != null)
+							result = new WebResourceResponse (cached.MimeType, "UTF-8", cached.DataSource ());
+					}
+					return result ?? base.ShouldInterceptRequest (view, url);
 				} finally {
 					IsInWebClientFrame = false;
 				}

@@ -131,7 +131,19 @@ await webView.RunScriptAsync (_ => Console.WriteLine (foo));
 
 This project is brand new, so expect bugs. Feedback and contributions are always welcome!
 
+## Cloning
+
+After cloning this repository, you'll also need to update the submodules:
+
+    git submodule update --init --recursive
+
+## Compiling
+
+I've been working in Xamarin Studio on the Mac, in which you can simply open `HybridKit.sln` and hit build.
+
+On Windows, I've heard reports of compilation issues, probably due to some C# 6 features used in the codebase. If you're on Windows, try compiling with Roslyn or the `mcs` compiler from Mono. If you get it working, let me know and I'll update this section.
+
 ## Running the Unit Tests
 
-Run the `HybridKit.Tests.Android` or `HybridKit.Tests.iOS` projects to run the tests on Android or iOS, respectively. Currently, the Android tests can only be run on Android Jellybean or earlier. To fix this, we either need a better workaround for [this Android bug](https://code.google.com/p/android/issues/detail?id=79924) (please upvote!) or a test runner that does not block the main thread during async tests.
+Run the `HybridKit.Tests.Android` or `HybridKit.Tests.iOS` projects to run the tests on Android or iOS, respectively.
 

@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Linq;
+using System.Reflection;
 using System.Collections.Generic;
 
-using Foundation;
-using UIKit;
+using GuiUnit;
 
 namespace HybridKit.Tests.iOS
 {
@@ -12,9 +12,13 @@ namespace HybridKit.Tests.iOS
 		// This is the main entry point of the application.
 		static void Main (string[] args)
 		{
-			// if you want to use a different Application Delegate class from "UnitTestAppDelegate"
-			// you can specify it here.
-			UIApplication.Main (args, null, "UnitTestAppDelegate");
+			new TestRunner (Console.Out).Execute (new[] {
+				// NUnitLite options:
+				"-labels",
+
+				// List the test assemblies here:
+				Assembly.GetExecutingAssembly ().Location
+			});
 		}
 	}
 }
