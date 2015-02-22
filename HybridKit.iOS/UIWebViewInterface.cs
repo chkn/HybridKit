@@ -1,6 +1,8 @@
 ﻿using System;
 using System.IO;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 using UIKit;
 using Foundation;
@@ -11,9 +13,14 @@ namespace HybridKit {
 	sealed class UIWebViewInterface : UIWebViewDelegate, IWebView, IScriptEvaluator {
 
 		internal static readonly Selector Key = new Selector ("_hybridInterfaceKey");
+		static readonly Selector webViewDidFinishLoad = new Selector ("webViewDidFinishLoad:");
+
+		static readonly Dictionary<IntPtr,IMP> delegateClassToLoadingFinished = new Dictionary<IntPtr,IMP> ();
+		static IMP webViewSetDelegate;
 
 		readonly UIWebView webView;
 		readonly CachedResources cache;
+		IMP delegateLoadingFinished;
 
 		public event EventHandler Loaded;
 
@@ -39,10 +46,7 @@ namespace HybridKit {
 
 		public override void LoadingFinished (UIWebView webView)
 		{
-			LoadHelperScript ();
-			var loaded = Loaded;
-			if (loaded != null)
-				loaded (this, EventArgs.Empty);
+			HandleLoadingFinished ();
 		}
 
 		public Task RunScriptAsync (ScriptLambda script)
@@ -97,6 +101,14 @@ namespace HybridKit {
 			}
 		}
 
+		void HandleLoadingFinished ()
+		{
+			LoadHelperScript ();
+			var loaded = Loaded;
+			if (loaded != null)
+				loaded (this, EventArgs.Empty);
+		}
+
 		void HandleCacheItemAdded (object sender, CachedEventArgs e)
 		{
 			var url = NSUrl.FromString (e.Url);
@@ -111,12 +123,96 @@ namespace HybridKit {
 			NSUrlCache.SharedCache.StoreCachedResponse (cachedResponse, req);
 		}
 
+		#region Delegate handling
+
 		void ConfigureDelegate ()
 		{
-			// FIXME: We need to swizzle the delegate property of the UIWebView
+			// We need to swizzle the delegate property of the UIWebView
 			//  so that we can hook the Loaded event even if the user changes the delegate.
-			webView.Delegate = this;
+			if (webViewSetDelegate == null) {
+				var uiWebView = new Class (typeof (UIWebView));
+				webViewSetDelegate = class_replaceMethod (uiWebView.Handle, Selector.GetHandle ("setDelegate:"), SetDelegateOverride, IMP_Types);
+			}
+
+			var currentDel = webView.WeakDelegate;
+			if (currentDel == null)
+				webView.Delegate = this;
+			else
+				SwizzleDelegate (currentDel);
 		}
+
+		[MonoPInvokeCallback (typeof (IMP))]
+		static void SetDelegateOverride (IntPtr webView, IntPtr sel, IntPtr del)
+		{
+			var @this = GetInstance (webView);
+			if (@this != null)
+				@this.SwizzleDelegate (Runtime.GetNSObject (del));
+			webViewSetDelegate (webView, sel, del);
+		}
+
+		void SwizzleDelegate (NSObject del)
+		{
+			if (del == null || del is UIWebViewInterface)
+				return;
+
+			var cls = del.Class;
+			if (delegateClassToLoadingFinished.TryGetValue (cls.Handle, out delegateLoadingFinished))
+				return;
+
+			// override webViewDidFinishLoad: if the delegate implements it
+			IMP overrideMethod = LoadingFinishedOverride;
+			if (del.RespondsToSelector (webViewDidFinishLoad)) {
+				delegateLoadingFinished = class_getMethodImplementation (cls.Handle, webViewDidFinishLoad.Handle);
+
+				// ensure we're not already swizzled on a base class
+				var superClass = cls.Handle;
+				while (delegateLoadingFinished == overrideMethod) {
+					superClass = class_getSuperclass (superClass);
+					if (delegateClassToLoadingFinished.TryGetValue (superClass, out delegateLoadingFinished)) {
+						delegateClassToLoadingFinished.Add (cls.Handle, delegateLoadingFinished);
+						return;
+					}
+				}
+			} else {
+				delegateLoadingFinished = null;
+			}
+			delegateClassToLoadingFinished.Add (cls.Handle, delegateLoadingFinished);
+			class_replaceMethod (cls.Handle, webViewDidFinishLoad.Handle, overrideMethod, IMP_Types);
+		}
+
+		[MonoPInvokeCallback (typeof (IMP))]
+		static void LoadingFinishedOverride (IntPtr del, IntPtr sel, IntPtr webView)
+		{
+			var @this = GetInstance (webView);
+			if (@this == null)
+				return;
+
+			@this.HandleLoadingFinished ();
+
+			if (@this.delegateLoadingFinished != null)
+				@this.delegateLoadingFinished (del, sel, webView);
+		}
+
+		static UIWebViewInterface GetInstance (IntPtr webViewPtr)
+		{
+			var webView = Runtime.GetNSObject (webViewPtr) as UIWebView;
+			return webView == null ? null : webView.GetInterface (create: false);
+		}
+
+		[DllImport (Constants.ObjectiveCLibrary)]
+		static extern IMP class_replaceMethod (IntPtr cls, IntPtr sel, IMP imp, string types);
+
+		[DllImport (Constants.ObjectiveCLibrary)]
+		static extern IMP class_getMethodImplementation (IntPtr cls, IntPtr sel);
+
+		[DllImport (Constants.ObjectiveCLibrary)]
+		static extern IntPtr class_getSuperclass (IntPtr cls); 
+
+		[MonoNativeFunctionWrapper]
+		delegate void IMP (IntPtr id, IntPtr sel, IntPtr arg1);
+		const string IMP_Types = "v@:@";
+
+		#endregion
 	}
 }
 

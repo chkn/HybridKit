@@ -9,15 +9,6 @@ using ObjCRuntime;
 
 namespace HybridKit {
 
-	enum ObjcAssociationPolicy
-	{
-		Assign = 0,
-		RetainNonatomic = 1,
-		CopyNonatomic = 3,
-		Retain = 01401,
-		Copy = 01403
-	};
-
 	public static class UIWebViewExtensions {
 
 		/// <summary>
@@ -40,7 +31,7 @@ namespace HybridKit {
 		/// <param name="webView">Web view for which to return the <c>IWebView</c>.</param>
 		public static IWebView AsHybridWebView (this UIWebView webView)
 		{
-			return webView.GetInterface ();
+			return webView.GetInterface (create: true);
 		}
 
 		/// <summary>
@@ -57,30 +48,12 @@ namespace HybridKit {
 			webView.LoadRequest (req);
 		}
 
-		internal static UIWebViewInterface GetInterface (this UIWebView webView)
+		internal static UIWebViewInterface GetInterface (this UIWebView webView, bool create)
 		{
 			// First, see if we've already created an interface for this webView
 			var existing = webView.GetAssociatedObject (UIWebViewInterface.Key.Handle) as UIWebViewInterface;
-			return existing ?? new UIWebViewInterface (webView);
+			return existing ?? (create? new UIWebViewInterface (webView) : null);
 		}
-
-		internal static void SetAssociatedObject (this NSObject obj, IntPtr key, NSObject value, ObjcAssociationPolicy policy = ObjcAssociationPolicy.RetainNonatomic)
-		{
-			objc_setAssociatedObject (obj.Handle, key, value.Handle, policy);
-			GC.KeepAlive (value);
-			GC.KeepAlive (obj);
-		}
-		internal static NSObject GetAssociatedObject (this NSObject obj, IntPtr key)
-		{
-			var result = Runtime.GetNSObject (objc_getAssociatedObject (obj.Handle, key));
-			GC.KeepAlive (obj);
-			return result;
-		}
-
-		[DllImport (Constants.ObjectiveCLibrary)]
-		static extern void objc_setAssociatedObject (IntPtr obj, IntPtr key, IntPtr value, ObjcAssociationPolicy policy);
-		[DllImport (Constants.ObjectiveCLibrary)]
-		static extern IntPtr objc_getAssociatedObject (IntPtr obj, IntPtr key); 
 	}
 }
 
