@@ -51,7 +51,7 @@ namespace HybridKit {
 		internal static UIWebViewInterface GetInterface (this UIWebView webView, bool create)
 		{
 			// First, see if we've already created an interface for this webView
-			var existing = webView.GetAssociatedObject (UIWebViewInterface.Key.Handle) as UIWebViewInterface;
+			var existing = webView.GetAssociatedObject (UIWebViewInterface.Key) as UIWebViewInterface;
 			return existing ?? (create? new UIWebViewInterface (webView) : null);
 		}
 	}

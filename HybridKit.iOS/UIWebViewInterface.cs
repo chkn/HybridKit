@@ -12,10 +12,10 @@ namespace HybridKit {
 
 	sealed class UIWebViewInterface : UIWebViewDelegate, IWebView, IScriptEvaluator {
 
-		internal static readonly Selector Key = new Selector ("_hybridInterfaceKey");
-		static readonly Selector webViewDidFinishLoad = new Selector ("webViewDidFinishLoad:");
-
+		internal static readonly IntPtr Key = Selector.GetHandle ("_hybridInterfaceKey");
+		static readonly IntPtr webViewDidFinishLoad = Selector.GetHandle ("webViewDidFinishLoad:");
 		static readonly Dictionary<IntPtr,IMP> delegateClassToLoadingFinished = new Dictionary<IntPtr,IMP> ();
+		static readonly IMP loadingFinishedOverride = LoadingFinishedOverride;
 		static IMP webViewSetDelegate;
 
 		readonly UIWebView webView;
@@ -38,7 +38,7 @@ namespace HybridKit {
 			cache.ItemAdded += HandleCacheItemAdded;
 
 			// Cache ourselves as this webView's interface
-			webView.SetAssociatedObject (Key.Handle, this);
+			webView.SetAssociatedObject (Key, this);
 
 			ConfigureDelegate ();
 			LoadHelperScript ();
@@ -155,42 +155,48 @@ namespace HybridKit {
 			if (del == null || del is UIWebViewInterface)
 				return;
 
-			var cls = del.Class;
-			if (delegateClassToLoadingFinished.TryGetValue (cls.Handle, out delegateLoadingFinished))
-				return;
-
-			// override webViewDidFinishLoad: if the delegate implements it
-			IMP overrideMethod = LoadingFinishedOverride;
-			if (del.RespondsToSelector (webViewDidFinishLoad)) {
-				delegateLoadingFinished = class_getMethodImplementation (cls.Handle, webViewDidFinishLoad.Handle);
-
-				// ensure we're not already swizzled on a base class
-				var superClass = cls.Handle;
-				while (delegateLoadingFinished == overrideMethod) {
-					superClass = class_getSuperclass (superClass);
-					if (delegateClassToLoadingFinished.TryGetValue (superClass, out delegateLoadingFinished)) {
-						delegateClassToLoadingFinished.Add (cls.Handle, delegateLoadingFinished);
-						return;
-					}
-				}
-			} else {
-				delegateLoadingFinished = null;
-			}
-			delegateClassToLoadingFinished.Add (cls.Handle, delegateLoadingFinished);
-			class_replaceMethod (cls.Handle, webViewDidFinishLoad.Handle, overrideMethod, IMP_Types);
+			delegateLoadingFinished = FindLoadingFinishedImpl (del.Handle);
 		}
 
 		[MonoPInvokeCallback (typeof (IMP))]
 		static void LoadingFinishedOverride (IntPtr del, IntPtr sel, IntPtr webView)
 		{
 			var @this = GetInstance (webView);
-			if (@this == null)
-				return;
+			if (@this != null) {
+				@this.HandleLoadingFinished ();
+				if (@this.delegateLoadingFinished != null)
+					@this.delegateLoadingFinished (del, sel, webView);
+			} else if (del != IntPtr.Zero) {
+				var method = FindLoadingFinishedImpl (del);
+				if (method != null)
+					method (del, sel, webView);
+			}
+		}
 
-			@this.HandleLoadingFinished ();
+		static IMP FindLoadingFinishedImpl (IntPtr id)
+		{
+			IMP result;
+			var cls = object_getClass (id);
+			if (delegateClassToLoadingFinished.TryGetValue (cls, out result))
+				return result;
 
-			if (@this.delegateLoadingFinished != null)
-				@this.delegateLoadingFinished (del, sel, webView);
+			result = null;
+			if (objc_msgSend_bool (id, Selector.GetHandle ("respondsToSelector:"), webViewDidFinishLoad)) {
+				result = class_getMethodImplementation (cls, webViewDidFinishLoad);
+
+				// ensure we're not already swizzled on a base class
+				var superClass = cls;
+				while (result == loadingFinishedOverride) {
+					superClass = class_getSuperclass (superClass);
+					if (delegateClassToLoadingFinished.TryGetValue (superClass, out result)) {
+						delegateClassToLoadingFinished.Add (cls, result);
+						return result;
+					}
+				}
+			}
+			delegateClassToLoadingFinished.Add (cls, result);
+			class_replaceMethod (cls, webViewDidFinishLoad, loadingFinishedOverride, IMP_Types);
+			return result;
 		}
 
 		static UIWebViewInterface GetInstance (IntPtr webViewPtr)
@@ -206,7 +212,13 @@ namespace HybridKit {
 		static extern IMP class_getMethodImplementation (IntPtr cls, IntPtr sel);
 
 		[DllImport (Constants.ObjectiveCLibrary)]
-		static extern IntPtr class_getSuperclass (IntPtr cls); 
+		static extern IntPtr class_getSuperclass (IntPtr cls);
+
+		[DllImport (Constants.ObjectiveCLibrary)]
+		static extern IntPtr object_getClass (IntPtr id);
+
+		[DllImport (Constants.ObjectiveCLibrary, EntryPoint = "objc_msgSend")]
+		static extern bool objc_msgSend_bool (IntPtr id, IntPtr sel, IntPtr arg);
 
 		[MonoNativeFunctionWrapper]
 		delegate void IMP (IntPtr id, IntPtr sel, IntPtr arg1);

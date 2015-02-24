@@ -44,6 +44,37 @@ namespace HybridKit.Tests {
 			await DelegatePostset<TestDelegateSubclass> ();
 		}
 
+		[Test]
+		public async Task DelegateNonHybridAfterHybrid ()
+		{
+			var del = new TestDelegate ();
+			var webView1 = new UIWebView {
+				Delegate = del
+			};
+			var hybrid = webView1.AsHybridWebView ();
+
+			var webView2 = new UIWebView {
+				Delegate = del
+			};
+			await TestLoadCallbacks (webView2, hybrid, del, false);
+		}
+
+		[Test]
+		public async Task UnswizzledDelegateNonHybridAfterHybrid ()
+		{
+			var del1 = new TestDelegate ();
+			var webView1 = new UIWebView {
+				Delegate = del1
+			};
+			var hybrid = webView1.AsHybridWebView ();
+
+			var del2 = new UnswizzledTestDelegateSubclass ();
+			var webView2 = new UIWebView {
+				Delegate = del2
+			};
+			await TestLoadCallbacks (webView2, hybrid, del2, false);
+		}
+
 		Task DelegatePreset<TDelegate> () where TDelegate : TestDelegate, new()
 		{
 			var webView = new UIWebView ();
@@ -52,7 +83,7 @@ namespace HybridKit.Tests {
 			webView.Delegate = del;
 
 			var hybrid = webView.AsHybridWebView ();
-			return TestLoadCallbacks (webView, hybrid, del);
+			return TestLoadCallbacks (webView, hybrid, del, true);
 		}
 
 		Task DelegatePostset<TDelegate> () where TDelegate : TestDelegate, new()
@@ -63,11 +94,11 @@ namespace HybridKit.Tests {
 			var hybrid = webView.AsHybridWebView ();
 
 			webView.Delegate = del;
-			return TestLoadCallbacks (webView, hybrid, del);
+			return TestLoadCallbacks (webView, hybrid, del, true);
 		}
 
 
-		async Task TestLoadCallbacks (UIWebView webView, IWebView hybrid, TestDelegate del)
+		async Task TestLoadCallbacks (UIWebView webView, IWebView hybrid, TestDelegate del, bool hybridLoadedShouldBeCalled)
 		{
 			var timeout = TimeSpan.FromSeconds (2);
 			var loadedTcs = new TaskCompletionSource<object> ();
@@ -81,7 +112,7 @@ namespace HybridKit.Tests {
 				Task.WhenAll (loadedTcs.Task, del.Finished)
 			);
 
-			Assert.IsTrue (loadedTcs.Task.IsCompleted, "#1");
+			Assert.AreEqual (hybridLoadedShouldBeCalled, loadedTcs.Task.IsCompleted, "#1");
 			Assert.IsTrue (del.LoadStartedCalled, "#2");
 			Assert.IsTrue (del.LoadFinishedCalled, "#3");
 		}
@@ -139,6 +170,9 @@ namespace HybridKit.Tests {
 		}
 
 		class TestDelegateSubclass : TestDelegate {
+		}
+
+		class UnswizzledTestDelegateSubclass : TestDelegateSubclass {
 		}
 	}
 }
