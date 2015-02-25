@@ -85,6 +85,30 @@ namespace HybridKit.Tests {
 		}
 
 		[Test]
+		public async Task DynamicOpsNumber ()
+		{
+			await WebView.RunScriptAsync (window => {
+				window.foo = 1;
+				window.bar = 2;
+				Assert.AreEqual (3, window.foo + window.bar, "#1");
+				Assert.AreEqual (3, window.foo | window.bar, "#2");
+				Assert.AreEqual (0, window.foo & window.bar, "#3");
+				//...
+			});
+		}
+
+		[Test]
+		public async Task DynamicOpsString ()
+		{
+			await WebView.RunScriptAsync (window => {
+				window.foo = "Hello ";
+				window.bar = "World!";
+				Assert.AreEqual ("Hello World!", window.foo + window.bar, "#1");
+				//...
+			});
+		}
+
+		[Test]
 		public async Task CallGlobalUndefined ()
 		{
 			await WebView.RunScriptAsync (window => {
