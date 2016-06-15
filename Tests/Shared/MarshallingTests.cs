@@ -129,6 +129,9 @@ namespace HybridKit.Tests {
 				var document = window.document;
 				document.write ("Foobar");
 				Assert.AreEqual ("Foobar", (string)document.body.innerHTML, "#1");
+
+				dynamic innerHTML = document.body.innerHTML;
+				Assert.AreEqual ("Foobar", innerHTML.ToString(), "#2");
 			});
 		}
 	}
