@@ -15,19 +15,18 @@ namespace HybridKit.Forms {
 
 	public class HybridWebViewRenderer : WebViewRenderer {
 
-		static Type webClientType;
+		//FIXME:  We need to kludge to get this private class to have all the functionality
+		//  of the builtin Android WebView renderer.
+		static Type webClientType = Type.GetType ("Xamarin.Forms.Platform.Android.WebViewRenderer+WebClient, Xamarin.Forms.Platform.Android");
 
 		public static void Init ()
 		{
-			//FIXME:  We need to kludge to get this private class to have all the functionality
-			//  of the builtin Android WebView renderer.
-			webClientType = Type.GetType ("Xamarin.Forms.Platform.Android.WebViewRenderer+WebClient, Xamarin.Forms.Platform.Android");
+			// Actual work done in static ctor (for XAML previewer compatibility),
+			//  but still have people call this to prevent link out.
 		}
 
 		protected override void OnElementChanged (ElementChangedEventArgs<WebView> e)
 		{
-			if (webClientType == null)
-				throw new InvalidOperationException ("HybridWebViewRenderer.Init() must be called before creating a HybridWebView");
 			var activity = Context as Activity;
 			if (activity == null)
 				throw new InvalidOperationException ("HybridKit requires the Context to be an Activity");
