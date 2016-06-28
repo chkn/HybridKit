@@ -15,6 +15,9 @@ namespace HybridKit.Forms {
 		public static new void Init ()
 		{
 			// Keeps us from being linked out.
+
+			// Call the ctor here to work around a very weird linker(?) issue
+			new HybridWebViewRenderer ();
 		}
 
 		protected override void OnElementChanged (VisualElementChangedEventArgs e)

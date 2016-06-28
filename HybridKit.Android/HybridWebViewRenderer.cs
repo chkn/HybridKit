@@ -23,6 +23,9 @@ namespace HybridKit.Forms {
 		{
 			// Actual work done in static ctor (for XAML previewer compatibility),
 			//  but still have people call this to prevent link out.
+
+			// Call the ctor here to work around a very weird linker(?) issue
+			new HybridWebViewRenderer ();
 		}
 
 		protected override void OnElementChanged (ElementChangedEventArgs<WebView> e)
