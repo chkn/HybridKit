@@ -39,6 +39,9 @@ namespace HybridKit {
 	/// This interface should be considered private API.
 	/// If the type implementing this interface is public,
 	/// this interface's methods should have explicit implementations.
+	/// <para>Generally, implementations are also responsible for intercepting
+	/// 	JavaScript <c>prompt</c> calls and passing them to <c>ScriptFunction.HandlePrompt</c>.
+	/// </para>
 	/// </remarks>
 	interface IScriptEvaluator {
 
@@ -54,6 +57,7 @@ namespace HybridKit {
 		/// </summary>
 		/// <remarks>
 		/// The dispatch should be done asynchronously, meaning this method should return immediately.
+		///  This will generally be called from the finalizer thread.
 		/// </remarks>
 		/// <param name="script">Script to execute in the web view.</param>
 		void EvalOnMainThread (string script);

@@ -17,6 +17,7 @@ namespace HybridKit {
 		static readonly Dictionary<IntPtr,IMP> delegateClassToLoadingFinished = new Dictionary<IntPtr,IMP> ();
 		static readonly IMP loadingFinishedOverride = LoadingFinishedOverride;
 		static IMP webViewSetDelegate;
+		static IMP4 webViewPrompt;
 
 		readonly UIWebView webView;
 		readonly CachedResources cache;
@@ -132,6 +133,7 @@ namespace HybridKit {
 			if (webViewSetDelegate == null) {
 				var uiWebView = new Class (typeof (UIWebView));
 				webViewSetDelegate = class_replaceMethod (uiWebView.Handle, Selector.GetHandle ("setDelegate:"), SetDelegateOverride, IMP_Types);
+				webViewPrompt = class_replaceMethod (uiWebView.Handle, Selector.GetHandle ("webView:runJavaScriptTextInputPanelWithPrompt:defaultText:initiatedByFrame:"), PromptOverride, IMP4_Types);
 			}
 
 			var currentDel = webView.WeakDelegate;
@@ -148,6 +150,22 @@ namespace HybridKit {
 			if (@this != null)
 				@this.SwizzleDelegate (Runtime.GetNSObject (del));
 			webViewSetDelegate (webView, sel, del);
+		}
+
+		[MonoPInvokeCallback (typeof (IMP4))]
+		static IntPtr PromptOverride (IntPtr webView, IntPtr sel, IntPtr wv1, IntPtr prompt, IntPtr defaultText, IntPtr frame)
+		{
+			var promptObj = Runtime.GetNSObject (prompt);
+			var defaultTextObj = Runtime.GetNSObject (defaultText);
+
+			string result;
+			if (ScriptFunction.HandlePrompt (
+				promptObj != null ? promptObj.ToString () : null,
+				defaultTextObj != null ? defaultTextObj.ToString () : null,
+				out result))
+				return NSString.CreateNative (result);
+
+			return webViewPrompt (webView, sel, wv1, prompt, defaultText, frame);
 		}
 
 		void SwizzleDelegate (NSObject del)
@@ -207,6 +225,8 @@ namespace HybridKit {
 
 		[DllImport (Constants.ObjectiveCLibrary)]
 		static extern IMP class_replaceMethod (IntPtr cls, IntPtr sel, IMP imp, string types);
+		[DllImport (Constants.ObjectiveCLibrary)]
+		static extern IMP4 class_replaceMethod (IntPtr cls, IntPtr sel, IMP4 imp, string types);
 
 		[DllImport (Constants.ObjectiveCLibrary)]
 		static extern IMP class_getMethodImplementation (IntPtr cls, IntPtr sel);
@@ -223,6 +243,10 @@ namespace HybridKit {
 		[MonoNativeFunctionWrapper]
 		delegate void IMP (IntPtr id, IntPtr sel, IntPtr arg1);
 		const string IMP_Types = "v@:@";
+
+		[MonoNativeFunctionWrapper]
+		delegate IntPtr IMP4 (IntPtr id, IntPtr sel, IntPtr arg1, IntPtr arg2, IntPtr arg3, IntPtr arg4);
+		const string IMP4_Types = "@@:@@@@";
 
 		#endregion
 	}

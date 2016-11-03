@@ -7,13 +7,17 @@ Simple C# – JavaScript bridge for building hybrid iOS and Android apps.
 - Call script functions and get/set values on script objects from C# using `dynamic`
 	- Marshals simple values between script and C# by value (JSON)
 	- Marshals complex script objects to C# by reference
+- Create strongly-typed wrappers for JavaScript APIs
 - Catch script exceptions in C#
+
+See [Docs/ObjectBridge.md](Docs/ObjectBridge.md) for in-depth documentation on the above.
+
 
 ### Here's what it doesn't do (yet):
 
 - Call C# methods from a script within a web view.
 - Attach C# event handlers to events on script objects.
-- Create strongly-typed wrappers for JavaScript APIs.
+
 
 # Getting Started
 
@@ -85,7 +89,7 @@ The path passed into both of these APIs is the bundle-relative path on iOS, or t
 
 To execute script inside the web view, call `RunScriptAsync` on the web view.
 
-Although the name of this method ends with "Async," it may actually run synchronously depending on the threading constraints of the current platform (see **important note about threading** below). Generally, you'll want to await the `Task` returned by this method, which simulates a synchronous method call in either case:
+Generally, you'll want to await the `Task` returned by this method, which simulates a synchronous method:
 
 ```
 await webView.RunScriptAsync (window => {
@@ -96,36 +100,12 @@ await webView.RunScriptAsync (window => {
 ```
 The `window` argument to the lambda is the JavaScript global object. In the example above, the JavaScript `prompt` function is called, which displays a dialog to the user, and returns their entered text (or the string "World" if they click Cancel). It then creates a new text node and appends it to the DOM. You can see this code in action in the KitchenSink sample app.
 
-**Important Note about Threading**
+## Read more
 
-Within the script lambda passed to `RunScriptAsync`, HybridKit evaluates JavaScript synchronously. Unfortunately, different platforms have different requirements for this:
+Read the documentation to get a deeper understanding of HybridKit:
 
-- On iOS, all calls into JavaScript must be done from the main UI thread.
-- On newer versions of Android (KitKat and later), it will deadlock if a call to JavaScript is made synchronously from the main UI thread.
-
-To accommodate these different requirements, the `RunScriptAsync` method may dispatch to a different thread to run the passed lambda. Because of this, you must be careful to properly synchronize external objects used in the lambda, and take proper care of any script objects persisted outside the scope of the lambda. Script objects may be used safely in multiple `RunScriptAsync` calls. Best practice for this is shown below:
-
-**DO NOT do this!** – It causes an implicit `ToString` call on the current thread, which might not work:
-
-```
-dynamic foo;
-await webView.RunScriptAsync (window => {
-	foo = window.foo;
-});
-// ...
-Console.WriteLine (foo);
-```
-
-**This is OK** – the `RunScriptAsync` method ensures the implicit `ToString` call happens on the correct thread:
-
-```
-dynamic foo;
-await webView.RunScriptAsync (window => {
-	foo = window.foo;
-});
-// ...
-await webView.RunScriptAsync (_ => Console.WriteLine (foo));
-```
+- [Object Bridging/Marshalling](Docs/ObjectBridge.md)
+- [Threading Model](Docs/Threading.md)
 
 # Development
 
@@ -145,5 +125,5 @@ On Windows, I've heard reports of compilation issues, probably due to some C# 6 
 
 ## Running the Unit Tests
 
-Run the `HybridKit.Tests.Android` or `HybridKit.Tests.iOS` projects to run the tests on Android or iOS, respectively.
+Run the `HybridKit.Tests.Android` or `HybridKit.Tests.iOS` projects to run the tests on Android or iOS, respectively. Please run the tests on at least one platform before submitting a Pull Request.
 

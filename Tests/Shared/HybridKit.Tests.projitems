@@ -12,5 +12,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)TestBase.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MarshallingTests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IWebViewTests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)WrapperTests.cs" />
   </ItemGroup>
 </Project>

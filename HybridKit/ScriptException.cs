@@ -14,12 +14,20 @@ namespace HybridKit {
 		}
 
 		internal ScriptException (IDictionary<string,object> errorDict)
-			: base (errorDict != null ? errorDict ["message"].ToString () : "An unknown error occurred while executing a script")
+			: base (GetMessage (errorDict))
 		{
 			// Hack to add JS stack trace to the exception..
 			object trace;
 			if (errorDict != null && RemoteStackTraceString != null && errorDict.TryGetValue ("stack", out trace))
 				RemoteStackTraceString.SetValue (this, Environment.NewLine + trace.ToString ());
+		}
+
+		static string GetMessage (IDictionary<string,object> errorDict)
+		{
+			object message;
+			if (!errorDict.TryGetValue ("message", out message))
+				message = "An unknown error occurred while executing a script";
+			return message.ToString ();
 		}
 	}
 }

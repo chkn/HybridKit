@@ -71,12 +71,15 @@ namespace HybridKit {
 			cache = new Dictionary<string,Cached> ();
 		}
 
-		public void Add (string url, Cached resource)
+		public bool Add (string url, Cached resource)
 		{
+			if (cache.ContainsKey (url))
+				return false;
 			cache.Add (url, resource);
 			var itemAdded = ItemAdded;
 			if (itemAdded != null)
 				itemAdded (this, new CachedEventArgs (url, resource));
+			return true;
 		}
 
 		public Cached GetCached (string url)

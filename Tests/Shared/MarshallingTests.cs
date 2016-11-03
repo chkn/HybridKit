@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 
 using NUnit.Framework;
 
@@ -70,6 +71,44 @@ namespace HybridKit.Tests {
 		}
 
 		[Test]
+		public async Task SetGetGlobalNumberArray ()
+		{
+			await WebView.RunScriptAsync (window => {
+				window.foo = new[] { 3, 1, 2 };
+
+				// Use by ref
+				Assert.AreEqual (3, window.foo.length, "#1");
+				Assert.AreEqual (3, window.foo [0], "#2");
+				Assert.AreEqual (1, window.foo [1], "#3");
+				Assert.AreEqual (2, window.foo [2], "#4");
+
+				// Get by value
+				var array = (int[])window.foo;
+				Assert.AreEqual (3, array.Length, "#5");
+				Assert.AreEqual (3, array [0], "#6");
+				Assert.AreEqual (1, array [1], "#7");
+				Assert.AreEqual (2, array [2], "#8");
+			});
+		}
+
+		//FIXME: Regex marshalling probably needs more tests
+		[Test]
+		public async Task SetGetGlobalRegex ()
+		{
+			await WebView.RunScriptAsync (window => {
+				var regExStr = "^\\d{3}-\\d{2}-(\\d{4})$";
+				window.foo = new Regex (regExStr, RegexOptions.Multiline);
+				Assert.IsTrue (window.foo.test ("123-45-6789"), "#1");
+				Assert.IsFalse (window.foo.test ("abc-45-6789"), "#2");
+				Assert.AreEqual ("6789", window.foo.exec ("123-45-6789") [1], "#3");
+
+				var rx = (Regex)window.foo;
+				Assert.AreEqual (regExStr, rx.ToString (), "#4");
+				Assert.IsTrue ((rx.Options & RegexOptions.Multiline) == RegexOptions.Multiline, "#5");
+			});
+		}
+
+		[Test]
 		public async Task SetGetPoco ()
 		{
 			await WebView.RunScriptAsync (window => {
@@ -133,6 +172,22 @@ namespace HybridKit.Tests {
 				dynamic innerHTML = document.body.innerHTML;
 				Assert.AreEqual ("Foobar", innerHTML.ToString(), "#2");
 			});
+		}
+
+		[Test]
+		public async Task PassAndCallStaticScriptFunction ()
+		{
+			await WebView.RunScriptAsync (window => {
+				using (var func = new ScriptFunction (new Func<string> (StaticScriptFunction))) {
+					window.foo = func;
+					Assert.AreEqual ("Hello from C#!", window.foo(), "#1");
+				}
+			});
+		}
+
+		static string StaticScriptFunction ()
+		{
+			return "Hello from C#!";
 		}
 	}
 }
