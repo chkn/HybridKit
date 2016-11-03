@@ -12,6 +12,8 @@ namespace HybridKit.Forms {
 
 	public class HybridWebViewRenderer : WebViewRenderer {
 
+		IWebView native;
+
 		public static new void Init ()
 		{
 			// Keeps us from being linked out.
@@ -20,10 +22,24 @@ namespace HybridKit.Forms {
 			new HybridWebViewRenderer ();
 		}
 
+		public HybridWebViewRenderer ()
+		{
+			native = this.AsHybridWebView ();
+			native.Loaded += Native_Loaded;
+		}
+
+		void Native_Loaded (object sender, EventArgs e)
+		{
+			// There appears to be a race that causes this to be called before `OnElementChanged`
+			var element = Element as HybridWebView;
+			if (element != null)
+				element.Native = native;
+		}
+
 		protected override void OnElementChanged (VisualElementChangedEventArgs e)
 		{
 			base.OnElementChanged (e);
-			((HybridWebView)e.NewElement).Native = ((UIWebView)NativeView).AsHybridWebView ();
+			((HybridWebView)e.NewElement).Native = native;
 		}
 	}
 }
