@@ -18,7 +18,7 @@
     Releases
     ========
 
-    + 0.0.1: incremental bug fixes
+    + 0.0.1-0.0.2: incremental bug fixes
     + 0.0.1-pre1: initial NuGet release
     </description>
     <tags>xamarin pcl xam.pcl android xamarin.forms ios html javascript webview uiwebview</tags>

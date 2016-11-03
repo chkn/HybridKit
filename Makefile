@@ -2,7 +2,7 @@ all:
 	@echo "Usage currently is 'make nupkg' or 'make publish'"
 	@false
 
-NUPKG  := Xam.Plugin.HybridKit.0.0.1.nupkg
+NUPKG  := Xam.Plugin.HybridKit.0.0.2.nupkg
 
 nupkg: $(NUPKG)
 
