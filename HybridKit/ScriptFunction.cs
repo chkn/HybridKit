@@ -83,7 +83,7 @@ namespace HybridKit {
 				throw new ObjectDisposedException ("ScriptFunction with Id = " + info.Id);
 
 			var buf = new StringBuilder ();
-			ScriptObject.MarshalIn (buf, func.Invoke (info.Args));
+			ScriptObject.MarshalToScript (buf, func.Invoke (info.Args));
 			result = buf.ToString ();
 			return true;
 		}

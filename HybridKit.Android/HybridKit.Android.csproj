@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -41,7 +41,6 @@
     <Reference Include="System.Core" />
     <Reference Include="Mono.Android" />
     <Reference Include="Mono.Android.Export" />
-    <Reference Include="Microsoft.CSharp" />
     <Reference Include="Xamarin.Android.Support.v4">
       <HintPath>..\packages\Xamarin.Android.Support.v4.21.0.3.0\lib\MonoAndroid10\Xamarin.Android.Support.v4.dll</HintPath>
     </Reference>
@@ -62,7 +61,7 @@
     <Compile Include="Resources\Resource.designer.cs" />
     <Compile Include="HybridWebView.cs" />
     <Compile Include="HybridWebViewRenderer.cs" />
-    <Compile Include="WebViewExtensions.cs" />
+    <Compile Include="Apps\App.cs" />
     <Compile Include="WebViewScriptEvaluator.cs" />
   </ItemGroup>
   <ItemGroup>

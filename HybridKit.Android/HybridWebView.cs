@@ -9,6 +9,8 @@ using Android.Webkit;
 using Android.Graphics;
 using Android.Net.Http;
 
+using Window = HybridKit.DOM.Window;
+
 namespace HybridKit.Android {
 
 	public class HybridWebView : WebView, IWebView {
@@ -23,17 +25,20 @@ namespace HybridKit.Android {
 			remove { hybridClient.Loaded -= value; }
 		}
 
-		public CachedResources Cache {
-			get { return hybridClient.Cache; }
+		public event EventHandler<NavigatingEventArgs> Navigating {
+			add { hybridClient.Navigating += value; }
+			remove { hybridClient.Navigating -= value; }
 		}
 
-		internal bool IsInWebClientFrame {
-			get { return hybridClient.IsInWebClientFrame; }
-		}
+		public CachedResources Cache => hybridClient.Cache;
 
-		internal bool CanRunScriptOnMainThread {
-			get { return IsJellybeanOrOlder && !IsInWebClientFrame; }
-		}
+		/// <summary>
+		/// Gets the JavaScript global window object.
+		/// </summary>
+		public Window Window => new Window (evaluator);
+
+		internal bool IsInWebClientFrame => hybridClient.IsInWebClientFrame;
+		internal bool CanRunScriptOnMainThread => IsJellybeanOrOlder && !IsInWebClientFrame;
 
 		public HybridWebView (Activity context): base (context)
 		{
@@ -43,36 +48,15 @@ namespace HybridKit.Android {
 			base.SetWebViewClient (hybridClient);
 		}
 
-		/// <summary>
-		/// Runs the specified script, possibly asynchronously.
-		/// </summary>
-		/// <remarks>
-		/// This method may dispatch to a different thread to run the passed lambda.
-		/// </remarks>
-		/// <param name="script">A lambda that interacts with the passed JavaScript global object.</param>
-		public Task RunScriptAsync (ScriptLambda script)
+		public void LoadFile (string bundleRelativePath)
 		{
-			if (CanRunScriptOnMainThread) {
-				script (GetGlobalObject ());
-				return Task.FromResult<object> (null);
-			} else {
-				// This simply ensures we're not running on the UI thread..
-				Action closure = () => script (GetGlobalObject ());
-				return Task.Run (closure);
-			}
+			var url = HybridKit.AndroidAssetPrefix + bundleRelativePath;
+			LoadUrl (url);
 		}
 
-		/// <summary>
-		/// Gets the JavaScript global window object.
-		/// </summary>
-		/// <remarks>
-		/// On iOS, all calls into JavaScript must be done from the main UI thread.
-		/// On Android, calls must NOT be made on the main UI thread. Any other thread is acceptable.
-		/// </remarks>
-		/// <returns>The global object.</returns>
-		ScriptObject GetGlobalObject ()
+		void IWebView.LoadString (string html, string baseUrl)
 		{
-			return new ScriptObject (evaluator);
+			LoadDataWithBaseURL (baseUrl ?? HybridKit.AndroidAssetPrefix, html, "text/html", "UTF-8", null);
 		}
 
 		public override void SetWebViewClient (WebViewClient client)
@@ -85,6 +69,7 @@ namespace HybridKit.Android {
 			readonly HybridWebView parent;
 
 			public event EventHandler Loaded;
+			public event EventHandler<NavigatingEventArgs> Navigating;
 
 			public WebViewClient BaseClient {
 				get;
@@ -151,9 +136,7 @@ namespace HybridKit.Android {
 				parent.evaluator.LoadHelperScript ();
 				IsInWebClientFrame = true;
 				try {
-					var loaded = Loaded;
-					if (loaded != null)
-						loaded (this, EventArgs.Empty);
+					Loaded?.Invoke (parent, EventArgs.Empty);
 					if (BaseClient != null)
 						BaseClient.OnPageFinished (view, url);
 					else
@@ -271,9 +254,7 @@ namespace HybridKit.Android {
 			{
 				IsInWebClientFrame = true;
 				try {
-					WebResourceResponse result = null;
-					if (BaseClient != null)
-						result = BaseClient.ShouldInterceptRequest (view, url);
+					var result = BaseClient?.ShouldInterceptRequest (view, url);
 					if (result == null) {
 						// See if any of our cached resources match..
 						var cached = Cache.GetCached (url);
@@ -300,7 +281,16 @@ namespace HybridKit.Android {
 			{
 				IsInWebClientFrame = true;
 				try {
-					return BaseClient != null ? BaseClient.ShouldOverrideUrlLoading (view, url) : base.ShouldOverrideUrlLoading (view, url);
+					var result = BaseClient?.ShouldOverrideUrlLoading (view, url) ?? false;
+					if (result)
+						return true;
+
+					var args = new NavigatingEventArgs (url);
+					Navigating?.Invoke (parent, args);
+					if (args.Cancel)
+						return true;
+
+					return base.ShouldOverrideUrlLoading (view, url);
 				} finally {
 					IsInWebClientFrame = false;
 				}

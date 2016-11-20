@@ -33,8 +33,8 @@ HybridKit = {
 		return (obj instanceof Error)? this.types.marshalByVal : this.types.marshalByRef;
 	},
 
-	// called by ScriptObject.MarshalOut
-	marshalOut: function (fnOrObj, type) {
+    // called by ScriptObject.MarshalToManaged
+	marshalToManaged: function (fnOrObj, type) {
 		var type, obj;
 		try {
 			obj = (typeof fnOrObj == 'function')? fnOrObj() : fnOrObj;

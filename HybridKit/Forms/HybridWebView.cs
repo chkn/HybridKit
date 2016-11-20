@@ -3,6 +3,8 @@ using System.Threading.Tasks;
 
 using Xamarin.Forms;
 
+using HybridKit.DOM;
+
 namespace HybridKit.Forms {
 
 	public class HybridWebView : WebView, IWebView {
@@ -12,25 +14,30 @@ namespace HybridKit.Forms {
 			set;
 		}
 
-		public CachedResources Cache {
-			get { return Native.Cache; }
-		}
+		public CachedResources Cache => Native.Cache;
+		public Window Window => Native.Window;
 
 		event EventHandler IWebView.Loaded {
 			add { Native.Loaded += value; }
 			remove { Native.Loaded -= value; }
 		}
 
-		/// <summary>
-		/// Runs the specified script, possibly asynchronously.
-		/// </summary>
-		/// <remarks>
-		/// This method may dispatch to a different thread to run the passed lambda.
-		/// </remarks>
-		/// <param name="script">A lambda that interacts with the passed JavaScript global object.</param>
-		public Task RunScriptAsync (ScriptLambda script)
+		event EventHandler<NavigatingEventArgs> IWebView.Navigating {
+			add { Native.Navigating += value; }
+			remove { Native.Navigating -= value; }
+		}
+
+		void IWebView.LoadFile (string bundleRelativePath)
 		{
-			return Native.RunScriptAsync (script);
+			Source = new BundleWebViewSource (bundleRelativePath);
+		}
+
+		void IWebView.LoadString (string html, string baseUrl)
+		{
+			Source = new HtmlWebViewSource {
+				BaseUrl = baseUrl,
+				Html = html
+			};
 		}
 	}
 }

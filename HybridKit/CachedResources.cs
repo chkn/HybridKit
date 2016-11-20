@@ -65,21 +65,23 @@ namespace HybridKit {
 		readonly Dictionary<string,Cached> cache;
 
 		public event EventHandler<CachedEventArgs> ItemAdded;
+		public event EventHandler<CachedEventArgs> ItemUpdated;
 
 		public CachedResources ()
 		{
 			cache = new Dictionary<string,Cached> ();
 		}
 
-		public bool Add (string url, Cached resource)
+		public void Set (string url, Cached resource)
 		{
-			if (cache.ContainsKey (url))
-				return false;
-			cache.Add (url, resource);
-			var itemAdded = ItemAdded;
-			if (itemAdded != null)
-				itemAdded (this, new CachedEventArgs (url, resource));
-			return true;
+			var eventArgs = new CachedEventArgs (url, resource);
+			if (cache.ContainsKey (url)) {
+				cache [url] = resource;
+				ItemUpdated?.Invoke (this, eventArgs);
+			} else {
+				cache.Add (url, resource);
+				ItemAdded?.Invoke (this, eventArgs);
+			}
 		}
 
 		public Cached GetCached (string url)

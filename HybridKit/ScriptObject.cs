@@ -1,16 +1,29 @@
 ﻿using System;
 using System.IO;
 using System.Text;
+using System.Linq;
 using System.Text.RegularExpressions;
-using System.Dynamic;
 using System.Reflection;
 using System.Linq.Expressions;
 using System.Xml.Serialization;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace HybridKit {
 
-	public class ScriptObject : IDynamicMetaObjectProvider {
+	public interface IDynamicScriptObject {
+
+		TScriptObject MemberOrIndex<TScriptObject> (object index)
+			where TScriptObject : ScriptObject;
+		IDynamicScriptObject this [object index] { get; }
+		Task<T> GetValue<T> ();
+		Task SetValue (object value);
+		Task<T> Invoke<T> (params object [] args);
+		Task<Regex> ToRegex ();
+		Task<T []> ToArray<T> ();
+	}
+
+	public class ScriptObject : IDynamicScriptObject {
 
 		#pragma warning disable 414
 
@@ -24,11 +37,7 @@ namespace HybridKit {
 		IScriptEvaluator host;
 		string refScript, disposeScript;
 
-		protected dynamic ScriptThis {
-			get { return this; }
-		}
-
-		internal ScriptObject (IScriptEvaluator host, string refScript = "self", string disposeScript = null)
+		internal ScriptObject (IScriptEvaluator host, string refScript, string disposeScript = null)
 		{
 			if (host == null)
 				throw new ArgumentNullException ("host");
@@ -58,62 +67,70 @@ namespace HybridKit {
 		~ScriptObject ()
 		{
 			if (disposeScript != null) {
-				//Console.WriteLine ("DISPOSING: {0}", disposeScript);
-				host.EvalOnMainThread (disposeScript);
+				host.EvalAsync (disposeScript);
+				disposeScript = null;
 			}
 		}
 
+		StringBuilder Ref () => new StringBuilder (refScript);
+
 		/// <summary>
-		/// Returns a <c>ScriptObject</c> representing a member of this instance.
+		/// Returns an object representing a member or index of this instance.
 		/// </summary>
-		/// <param name="name">The name of the member.</param>
-		[XmlPreserve]
-		ScriptObject Member (string name)
+		protected TScriptObject MemberOrIndex<TScriptObject> (object index)
+			where TScriptObject : ScriptObject
 		{
-			// FIXME: Escape to Javascript allowed member names?
-			var script = Ref ().Append ('.').Append (name).ToString ();
-			return new ScriptObject (this, script);
+			var sb = Ref ().Append ('[');
+			MarshalToScript (sb, index);
+			return AsTyped<TScriptObject> (new ScriptObject (this, sb.Append (']').ToString ()));
+		}
+		TScriptObject IDynamicScriptObject.MemberOrIndex<TScriptObject> (object index)
+		{
+			return MemberOrIndex<TScriptObject> (index);
 		}
 
 		/// <summary>
-		/// Returns a <c>ScriptObject</c> representing an index of this instance.
+		/// Returns a <c>ScriptObject</c> representing a member or index of this instance.
 		/// </summary>
-		/// <param name="name">The index.</param>
-		[XmlPreserve]
-		ScriptObject Index (object index)
-		{
-			var sb = Ref ().Append ('[');
-			MarshalIn (sb, index);
-			return new ScriptObject (this, sb.Append (']').ToString ());
+		protected IDynamicScriptObject this [object index] {
+			get { return MemberOrIndex<ScriptObject> (index); }
+		}
+		IDynamicScriptObject IDynamicScriptObject.this [object index] {
+			get { return this [index]; }
 		}
 
 		/// <summary>
 		/// Gets the value of this instance.
 		/// </summary>
-		[XmlPreserve]
-		object Get (Type expectedType = null)
+		protected Task<T> GetValue<T> ()
 		{
-			return Eval (refScript, expectedType);
+			return Eval<T> (refScript);
+		}
+		Task<T> IDynamicScriptObject.GetValue<T> ()
+		{
+			return GetValue<T> ();
 		}
 
 		/// <summary>
 		/// Sets the value of this instance to the specified value.
 		/// </summary>
 		/// <param name="value">Value.</param>
-		[XmlPreserve]
-		object Set (object value, Type expectedType = null)
+		protected Task SetValue (object value)
 		{
 			var sb = Ref ().Append ('=');
-			MarshalIn (sb, value);
-			return Eval (sb.ToString (), expectedType);
+			MarshalToScript (sb, value);
+			return Eval (sb.ToString ());
+		}
+		Task IDynamicScriptObject.SetValue (object value)
+		{
+			return SetValue (value);
 		}
 
 		/// <summary>
 		/// Invokes this instance representing a JavaScript function.
 		/// </summary>
 		/// <param name="args">Arguments to the function invocation.</param>
-		[XmlPreserve]
-		object Invoke (Type expectedType = null, params object [] args)
+		protected Task<T> Invoke<T> (params object [] args)
 		{
 			var sb = Ref ().Append ('(');
 			var first = true;
@@ -122,10 +139,14 @@ namespace HybridKit {
 					sb.Append (',');
 				else
 					first = false;
-				MarshalIn (sb, arg);
+				MarshalToScript (sb, arg);
 			}
 			sb.Append (')');
-			return Eval (sb.ToString (), expectedType);
+			return Eval<T> (sb.ToString ());
+		}
+		Task<T> IDynamicScriptObject.Invoke<T> (params object [] args)
+		{
+			return Invoke<T> (args);
 		}
 
 		/// <summary>
@@ -133,15 +154,18 @@ namespace HybridKit {
 		///  convert it to a C# Regex.
 		/// </summary>
 		/// <returns>The regex.</returns>
-		[XmlPreserve]
-		Regex ToRegex ()
+		protected async Task<Regex> ToRegex ()
 		{
 			var opts = RegexOptions.None;
-			if (host.Eval (refScript + ".ignoreCase") == "true")
-				opts |= RegexOptions.IgnoreCase;
-			if (host.Eval (refScript + ".multiline") == "true")
-				opts |= RegexOptions.Multiline;
-			return new Regex (host.Eval (refScript + ".source"), opts);
+			var script = $"function(r){{return JSON.stringify([String(r.ignoreCase),String(r.multiline),r.source])}}({refScript})";
+			var jsOpts = JSON.Parse<string[]> (await host.EvalAsync (script));
+			if (jsOpts [0] == "true") opts |= RegexOptions.IgnoreCase;
+			if (jsOpts [1] == "true") opts |= RegexOptions.Multiline;
+			return new Regex (jsOpts [3], opts);
+		}
+		Task<Regex> IDynamicScriptObject.ToRegex ()
+		{
+			return ToRegex ();
 		}
 
 		/// <summary>
@@ -149,29 +173,46 @@ namespace HybridKit {
 		///  unboxes it into a C# array.
 		/// </summary>
 		/// <returns>The array.</returns>
-		/// <param name="arrayType">Array type.</param>
-		[XmlPreserve]
-		Array ToArray (Type arrayType)
+		protected Task<T[]> ToArray<T> ()
 		{
-			return (Array)Eval (refScript, arrayType, ScriptType.MarshalByVal);
+			return Eval<T[]> (refScript, ScriptType.MarshalByVal);
+		}
+		Task<T []> IDynamicScriptObject.ToArray<T> ()
+		{
+			return ToArray<T> ();
 		}
 
-		public override string ToString ()
+		async Task<T> Eval<T> (string script, ScriptType marshalAs = default (ScriptType))
 		{
-			return Eval ("HybridKit.toString(" + refScript + ")", typeof (string))?.ToString ();
+			return AsTyped<T> (await Eval (script, typeof (T), marshalAs));
 		}
-
-		StringBuilder Ref ()
+		async Task<object> Eval (string script, Type expectedType = null, ScriptType marshalAs = default (ScriptType))
 		{
-			var sb = new StringBuilder ();
-			sb.Append (refScript);
-			return sb;
-		}
-
-		object Eval (string script, Type expectedType = null, ScriptType marshalAs = default (ScriptType))
-		{
-			var result = host.Eval (MarshalOut (script, marshalAs));
+			var result = await host.EvalAsync (MarshalToManaged (script, marshalAs));
 			return UnmarshalResult (result, expectedType);
+		}
+
+		T AsTyped<T> (object obj)
+		{
+			if (obj is T)
+				return (T)obj;
+
+			var scriptObject = obj as ScriptObject;
+			if (scriptObject != null) {
+				var ctor = (from c in typeof (T).GetTypeInfo ().DeclaredConstructors
+							let args = c.GetParameters ()
+							where args.Length == 1 && args [0].ParameterType == typeof (ScriptObject)
+							select c).FirstOrDefault ();
+				if (ctor == null)
+					throw new ArgumentException ("Target type doesn't have a constructor that takes ScriptObject", "T");
+
+				return (T)ctor.Invoke (new object [] { scriptObject });
+			}
+
+			if (typeof (T).GetTypeInfo ().IsAssignableFrom (typeof (ScriptObject).GetTypeInfo ()))
+				return (T)(object)new ScriptObject (host, JSON.Stringify (obj));
+
+			throw new ArgumentException ("Object cannot be converted to target type", nameof (obj));
 		}
 
 		object UnmarshalResult (string result, Type expectedType = null)
@@ -198,7 +239,7 @@ namespace HybridKit {
 		/// <summary>
 		/// Marshals a value that is passed into JavaScript.
 		/// </summary>
-		internal static void MarshalIn (StringBuilder buf, object obj)
+		internal static void MarshalToScript (StringBuilder buf, object obj)
 		{
 			var so = obj as ScriptObject;
 			if (so != null) {
@@ -212,7 +253,7 @@ namespace HybridKit {
 
 			var sf = obj as ScriptFunction;
 			if (sf != null) {
-				buf.Append ("function(){return HybridKit.callback(" + sf.Id + ",arguments)}");
+				buf.Append ($"function(){{return HybridKit.callback({sf.Id},arguments)}}");
 				return;
 			}
 
@@ -221,258 +262,12 @@ namespace HybridKit {
 		}
 
 		/// <summary>
-		/// Marshals a value that is received from JavaScript.
+		/// Returns a script to marshal the value returned by the given script.
 		/// </summary>
-		static string MarshalOut (string script, ScriptType type)
+		static string MarshalToManaged (string script, ScriptType type)
 		{
-			return "HybridKit.marshalOut(function(){return " + script + "}," + (int)type + ")";
+			return $"HybridKit.marshalToManaged(function(){{return {script};}},{(int)type})";
 		}
-
-		#region Equality
-
-		public override bool Equals (object obj)
-		{
-			return obj == this;
-		}
-
-		// FIXME: Preliminary implementation
-		public static bool operator == (object other, ScriptObject obj)
-		{
-			if (object.ReferenceEquals (obj, other))
-				return true;
-			if (object.ReferenceEquals (obj, null))
-				return other == null;
-
-			// FIXME: Don't depend on other's Type!
-			var value = obj.Get (other?.GetType ());
-			if (value == null)
-				return other == null;
-
-			return value.Equals (other);
-		}
-		public static bool operator != (object other, ScriptObject obj)
-		{
-			return !(other == obj);
-		}
-
-		#endregion
-
-		#region IDynamicMetaObjectProvider implementation
-
-		DynamicMetaObject IDynamicMetaObjectProvider.GetMetaObject (Expression parameter)
-		{
-			return new ScriptMetaObject (parameter, BindingRestrictions.Empty, this);
-		}
-
-		class ScriptMetaObject : DynamicMetaObject {
-
-			static readonly MethodInfo GetInfo;
-			static readonly MethodInfo SetInfo;
-			static readonly MethodInfo InvokeInfo;
-			static readonly MethodInfo EqualsInfo;
-			static readonly MethodInfo ToRegexInfo;
-			static readonly MethodInfo IndexInfo;
-			static readonly MethodInfo ToArrayInfo;
-
-			static ScriptMetaObject ()
-			{
-				var typeInfo = typeof (ScriptObject).GetTypeInfo ();
-				GetInfo = typeInfo.GetDeclaredMethod (nameof (Get));
-				SetInfo = typeInfo.GetDeclaredMethod (nameof (Set));
-				InvokeInfo = typeInfo.GetDeclaredMethod (nameof (Invoke));
-				EqualsInfo = typeInfo.GetDeclaredMethod (nameof (Equals));
-				ToRegexInfo = typeInfo.GetDeclaredMethod (nameof (ToRegex));
-				IndexInfo = typeInfo.GetDeclaredMethod (nameof (Index));
-				ToArrayInfo = typeInfo.GetDeclaredMethod (nameof (ToArray));
-			}
-
-			public new ScriptObject Value {
-				get { return (ScriptObject)base.Value; }
-			}
-
-			public ScriptMetaObject (Expression parameter, BindingRestrictions restrictions, ScriptObject value)
-				: base (parameter, restrictions, value)
-			{
-			}
-
-			public override DynamicMetaObject BindConvert (ConvertBinder binder)
-			{
-				var typeInfo = binder.Type.GetTypeInfo ();
-
-				// If the result type is a subclass of ScriptObject, assume it is a strongly-typed
-				//  binding and call the constructor with our instance.
-				if (typeInfo.IsSubclassOf (typeof (ScriptObject)))
-					return StronglyTypedCastResult (binder.Type);
-
-				// As another special case, allow converting JavaScript RegExp objects into C# Regex
-				if (typeof (Regex).GetTypeInfo ().IsAssignableFrom (typeInfo))
-					return GetRegexResult (Value, binder.Type);
-
-				// Unbox by-ref arrays
-				if (typeInfo.IsArray)
-					return UnboxArrayResult (Value, binder.Type);
-
-				// Otherwise, get the value of our current instance and try to cast that.
-				return GetValueResult (Value, binder.Type);
-			}
-
-			public override DynamicMetaObject BindGetMember (GetMemberBinder binder)
-			{
-				return GetValueResult (Value.Member (binder.Name), binder.ReturnType);
-			}
-
-			public override DynamicMetaObject BindSetMember (SetMemberBinder binder, DynamicMetaObject value)
-			{
-				return SetValueResult (Value.Member (binder.Name), binder.ReturnType, value);
-			}
-
-			public override DynamicMetaObject BindInvokeMember (InvokeMemberBinder binder, DynamicMetaObject[] args)
-			{
-				return InvokeResult (Value.Member (binder.Name), binder.ReturnType, args);
-			}
-
-			public override DynamicMetaObject BindInvoke (InvokeBinder binder, DynamicMetaObject[] args)
-			{
-				return InvokeResult (Value, binder.ReturnType, args);
-			}
-
-			public override DynamicMetaObject BindBinaryOperation (BinaryOperationBinder binder, DynamicMetaObject arg)
-			{
-				switch (binder.Operation) {
-
-				case ExpressionType.Equal:
-					return EqualsResult (Value, binder.ReturnType, arg);
-				}
-				throw new NotImplementedException (binder.Operation.ToString ());
-			}
-
-			public override DynamicMetaObject BindGetIndex (GetIndexBinder binder, DynamicMetaObject[] indexes)
-			{
-				if (indexes.Length != 1)
-					return base.BindGetIndex (binder, indexes);
-				return GetValueResult (Value, indexes [0].Expression, binder.ReturnType);
-			}
-
-			DynamicMetaObject StronglyTypedCastResult (Type resultType)
-			{
-				ConstructorInfo constructor = null;
-				var typeInfo = resultType.GetTypeInfo ();
-				foreach (var ctor in typeInfo.DeclaredConstructors) {
-					var parameters = ctor.GetParameters ();
-					if (parameters.Length == 1 && typeof (ScriptObject).GetTypeInfo ().IsAssignableFrom (parameters [0].ParameterType.GetTypeInfo ())) {
-						constructor = ctor;
-						break;
-					}
-				}
-				return new DynamicMetaObject (
-					AddConvertIfNeeded (
-						Expression.New (
-							constructor,
-							Expression.Constant (Value, typeof (ScriptObject))
-						), resultType),
-					GetRestrictions ());
-			}
-
-			DynamicMetaObject GetRegexResult (ScriptObject field, Type resultType)
-			{
-				return new DynamicMetaObject (
-					AddConvertIfNeeded (
-						Expression.Call (
-							Expression.Constant (field, typeof (ScriptObject)),
-							ToRegexInfo
-						), resultType),
-					GetRestrictions ());
-			}
-
-			DynamicMetaObject UnboxArrayResult (ScriptObject field, Type resultType)
-			{
-				return new DynamicMetaObject (
-					AddConvertIfNeeded (
-						Expression.Call (
-							Expression.Constant (field, typeof (ScriptObject)),
-							ToArrayInfo,
-							Expression.Constant (resultType, typeof (Type))
-						), resultType),
-					GetRestrictions ());
-			}
-
-			DynamicMetaObject GetValueResult (ScriptObject field, Type resultType)
-			{
-				return new DynamicMetaObject (
-					AddConvertIfNeeded (
-						Expression.Call (
-							Expression.Constant (field, typeof (ScriptObject)),
-							GetInfo,
-							Expression.Constant (resultType, typeof (Type))
-						), resultType),
-					GetRestrictions ());
-			}
-
-			DynamicMetaObject GetValueResult (ScriptObject field, Expression index, Type resultType)
-			{
-				return new DynamicMetaObject (
-					AddConvertIfNeeded (
-						Expression.Call (
-							Expression.Call (Expression.Constant (field, typeof (ScriptObject)), IndexInfo, Expression.Convert (index, typeof (object))),
-							GetInfo,
-							Expression.Constant (resultType, typeof (Type))
-						), resultType),
-					GetRestrictions ());
-			}
-
-			DynamicMetaObject SetValueResult (ScriptObject field, Type resultType, DynamicMetaObject value)
-			{
-				return new DynamicMetaObject (
-					AddConvertIfNeeded (
-						Expression.Call (
-							Expression.Constant (field, typeof (ScriptObject)),
-							SetInfo,
-							AddConvertIfNeeded (value.Expression, typeof (object)),
-							Expression.Constant (resultType, typeof (Type))
-						), resultType),
-					GetRestrictions ());
-			}
-
-			DynamicMetaObject EqualsResult (ScriptObject field, Type resultType, DynamicMetaObject value)
-			{
-				return new DynamicMetaObject (
-					AddConvertIfNeeded (
-						Expression.Call (
-							Expression.Constant (field, typeof (ScriptObject)),
-							EqualsInfo,
-							AddConvertIfNeeded (value.Expression, typeof (object))
-						), resultType),
-					GetRestrictions ());
-			}
-
-			DynamicMetaObject InvokeResult (ScriptObject func, Type resultType, DynamicMetaObject [] args)
-			{
-				var argExprs = new Expression [args.Length];
-				for (var i = 0; i < args.Length; i++)
-					argExprs [i] = Expression.Convert (args [i].Expression, typeof (object));
-				return new DynamicMetaObject (
-					AddConvertIfNeeded (
-						Expression.Call (
-							Expression.Constant (func, typeof (ScriptObject)),
-							InvokeInfo,
-							Expression.Constant (resultType, typeof (Type)),
-							Expression.NewArrayInit (typeof (object), argExprs)
-						), resultType),
-					GetRestrictions ());
-			}
-
-			BindingRestrictions GetRestrictions ()
-			{
-				return BindingRestrictions.GetTypeRestriction (Expression, LimitType);
-			}
-
-			static Expression AddConvertIfNeeded (Expression expr, Type resultType)
-			{
-				return expr.Type != resultType ? Expression.Convert (expr, resultType) : expr;
-			}
-		}
-
-		#endregion
 	}
 }
 

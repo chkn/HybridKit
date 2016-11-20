@@ -4,23 +4,24 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-using UIKit;
+using WebKit;
 using Foundation;
 using ObjCRuntime;
 
 namespace HybridKit {
 
-	sealed class UIWebViewInterface : UIWebViewDelegate, IWebView, IScriptEvaluator {
+	sealed class WKWebViewInterface : NSObject, IWKNavigationDelegate, IWebView, IScriptEvaluator {
 
 		internal static readonly IntPtr Key = Selector.GetHandle ("_hybridInterfaceKey");
 		static readonly IntPtr webViewDidFinishLoad = Selector.GetHandle ("webViewDidFinishLoad:");
-		static readonly Imps.IMP1 loadingFinishedOverride = LoadingFinishedOverride;
-		static Swizzled<Imps.IMP1> webViewSetDelegate;
-		static Swizzled<Imps.IMP4> webViewPrompt;
+		static readonly Dictionary<IntPtr,IMP> delegateClassToLoadingFinished = new Dictionary<IntPtr,IMP> ();
+		static readonly IMP loadingFinishedOverride = LoadingFinishedOverride;
+		static IMP webViewSetDelegate;
+		static IMP4 webViewPrompt;
 
-		readonly UIWebView webView;
+		readonly WKWebView webView;
 		readonly CachedResources cache;
-		Swizzled<Imps.IMP1> delegateLoadingFinished;
+		IMP delegateLoadingFinished;
 
 		public event EventHandler Loaded;
 
@@ -28,7 +29,7 @@ namespace HybridKit {
 			get { return cache; }
 		}
 
-		public UIWebViewInterface (UIWebView webView)
+		public WKWebViewInterface (WKWebView webView)
 		{
 			if (webView == null)
 				throw new ArgumentNullException ("webView");
@@ -36,7 +37,6 @@ namespace HybridKit {
 			this.webView = webView;
 			this.cache = new CachedResources ();
 			cache.ItemAdded += HandleCacheItemAdded;
-			cache.ItemUpdated += HandleCacheItemAdded;
 
 			// Cache ourselves as this webView's interface
 			webView.SetAssociatedObject (Key, this);
@@ -45,12 +45,13 @@ namespace HybridKit {
 			LoadHelperScript ();
 		}
 
-		public override void LoadingFinished (UIWebView webView)
+		[Export ("webView:didFinishNavigation:")]
+		public void DidFinishNavigation (WKWebView webView, WKNavigation navigation)
 		{
 			HandleLoadingFinished ();
 		}
 
-		public Task RunScriptAsync (ScriptLambda script)
+		public Task<T> RunScriptAsync<T> (ScriptLambda script)
 		{
 			var tcs = new TaskCompletionSource<object> ();
 			Action closure = () => {
@@ -89,7 +90,10 @@ namespace HybridKit {
 		/// On Android, calls must NOT be made on the main UI thread. Any other thread is acceptable.
 		/// </remarks>
 		/// <returns>The global object.</returns>
-		ScriptObject GetGlobalObject () => new ScriptObject (this);
+		ScriptObject GetGlobalObject ()
+		{
+			return new ScriptObject (this);
+		}
 
 		void LoadHelperScript ()
 		{
@@ -128,9 +132,9 @@ namespace HybridKit {
 			// We need to swizzle the delegate property of the UIWebView
 			//  so that we can hook the Loaded event even if the user changes the delegate.
 			if (webViewSetDelegate == null) {
-				var uiWebView = Class.GetHandle (typeof (UIWebView));
-				webViewSetDelegate = Swizzled.InstanceMethod (uiWebView, "setDelegate:", Imps.SetImp1, SetDelegateOverride);
-				webViewPrompt = Swizzled.InstanceMethod (uiWebView, "webView:runJavaScriptTextInputPanelWithPrompt:defaultText:initiatedByFrame:", Imps.SetImp4, PromptOverride);
+				var uiWebView = new Class (typeof (UIWebView));
+				webViewSetDelegate = class_replaceMethod (uiWebView.Handle, Selector.GetHandle ("setDelegate:"), SetDelegateOverride, IMP_Types);
+				webViewPrompt = class_replaceMethod (uiWebView.Handle, Selector.GetHandle ("webView:runJavaScriptTextInputPanelWithPrompt:defaultText:initiatedByFrame:"), PromptOverride, IMP4_Types);
 			}
 
 			var currentDel = webView.WeakDelegate;
@@ -140,22 +144,16 @@ namespace HybridKit {
 				SwizzleDelegate (currentDel);
 		}
 
-		void SwizzleDelegate (NSObject del)
-		{
-			if (del != null && !(del is UIWebViewInterface))
-				delegateLoadingFinished = FindLoadingFinishedImpl (del.Handle);
-		}
-
-		[MonoPInvokeCallback (typeof (Imps.IMP1))]
+		[MonoPInvokeCallback (typeof (IMP))]
 		static void SetDelegateOverride (IntPtr webView, IntPtr sel, IntPtr del)
 		{
 			var @this = GetInstance (webView);
 			if (@this != null)
 				@this.SwizzleDelegate (Runtime.GetNSObject (del));
-			webViewSetDelegate.Original (webView, sel, del);
+			webViewSetDelegate (webView, sel, del);
 		}
 
-		[MonoPInvokeCallback (typeof (Imps.IMP4))]
+		[MonoPInvokeCallback (typeof (IMP4))]
 		static IntPtr PromptOverride (IntPtr webView, IntPtr sel, IntPtr wv1, IntPtr prompt, IntPtr defaultText, IntPtr frame)
 		{
 			var promptObj = Runtime.GetNSObject (prompt);
@@ -168,27 +166,56 @@ namespace HybridKit {
 				out result))
 				return NSString.CreateNative (result);
 
-			return webViewPrompt.Original (webView, sel, wv1, prompt, defaultText, frame);
+			return webViewPrompt (webView, sel, wv1, prompt, defaultText, frame);
 		}
 
-		[MonoPInvokeCallback (typeof (Imps.IMP1))]
+		void SwizzleDelegate (NSObject del)
+		{
+			if (del == null || del is UIWebViewInterface)
+				return;
+
+			delegateLoadingFinished = FindLoadingFinishedImpl (del.Handle);
+		}
+
+		[MonoPInvokeCallback (typeof (IMP))]
 		static void LoadingFinishedOverride (IntPtr del, IntPtr sel, IntPtr webView)
 		{
 			var @this = GetInstance (webView);
 			if (@this != null) {
 				@this.HandleLoadingFinished ();
-				@this.delegateLoadingFinished?.Original (del, sel, webView);
+				if (@this.delegateLoadingFinished != null)
+					@this.delegateLoadingFinished (del, sel, webView);
 			} else if (del != IntPtr.Zero) {
-				var swizzle = FindLoadingFinishedImpl (del);
-				if (swizzle != null)
-					swizzle.Original (del, sel, webView);
+				var method = FindLoadingFinishedImpl (del);
+				if (method != null)
+					method (del, sel, webView);
 			}
 		}
 
-		static Swizzled<Imps.IMP1> FindLoadingFinishedImpl (IntPtr id)
+		static IMP FindLoadingFinishedImpl (IntPtr id)
 		{
+			IMP result;
 			var cls = object_getClass (id);
-			return Swizzled.InstanceMethod (cls, webViewDidFinishLoad, Imps.SetImp1, loadingFinishedOverride);
+			if (delegateClassToLoadingFinished.TryGetValue (cls, out result))
+				return result;
+
+			result = null;
+			if (objc_msgSend_bool (id, Selector.GetHandle ("respondsToSelector:"), webViewDidFinishLoad)) {
+				result = class_getMethodImplementation (cls, webViewDidFinishLoad);
+
+				// ensure we're not already swizzled on a base class
+				var superClass = cls;
+				while (result == loadingFinishedOverride) {
+					superClass = class_getSuperclass (superClass);
+					if (delegateClassToLoadingFinished.TryGetValue (superClass, out result)) {
+						delegateClassToLoadingFinished.Add (cls, result);
+						return result;
+					}
+				}
+			}
+			delegateClassToLoadingFinished.Add (cls, result);
+			class_replaceMethod (cls, webViewDidFinishLoad, loadingFinishedOverride, IMP_Types);
+			return result;
 		}
 
 		static UIWebViewInterface GetInstance (IntPtr webViewPtr)
@@ -198,7 +225,29 @@ namespace HybridKit {
 		}
 
 		[DllImport (Constants.ObjectiveCLibrary)]
+		static extern IMP class_replaceMethod (IntPtr cls, IntPtr sel, IMP imp, string types);
+		[DllImport (Constants.ObjectiveCLibrary)]
+		static extern IMP4 class_replaceMethod (IntPtr cls, IntPtr sel, IMP4 imp, string types);
+
+		[DllImport (Constants.ObjectiveCLibrary)]
+		static extern IMP class_getMethodImplementation (IntPtr cls, IntPtr sel);
+
+		[DllImport (Constants.ObjectiveCLibrary)]
+		static extern IntPtr class_getSuperclass (IntPtr cls);
+
+		[DllImport (Constants.ObjectiveCLibrary)]
 		static extern IntPtr object_getClass (IntPtr id);
+
+		[DllImport (Constants.ObjectiveCLibrary, EntryPoint = "objc_msgSend")]
+		static extern bool objc_msgSend_bool (IntPtr id, IntPtr sel, IntPtr arg);
+
+		[MonoNativeFunctionWrapper]
+		delegate void IMP (IntPtr id, IntPtr sel, IntPtr arg1);
+		const string IMP_Types = "v@:@";
+
+		[MonoNativeFunctionWrapper]
+		delegate IntPtr IMP4 (IntPtr id, IntPtr sel, IntPtr arg1, IntPtr arg2, IntPtr arg3, IntPtr arg4);
+		const string IMP4_Types = "@@:@@@@";
 
 		#endregion
 	}

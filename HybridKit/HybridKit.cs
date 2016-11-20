@@ -9,11 +9,9 @@ namespace System.Xml.Serialization {
 namespace HybridKit {
 	using System.Xml.Serialization;
 
-	public delegate void ScriptLambda (dynamic window);
-
 	static class HybridKit {
 
-		public const string Magic = "hybridkit1";
+		public const string Magic = "hybridkit2";
 
 		// This is what will be passed as the 'defaultValue' argument to the JavaScript 'prompt'
 		//  function to indicate that we are to handle it specially as a callback into C#.

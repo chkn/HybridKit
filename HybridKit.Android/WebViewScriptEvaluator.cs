@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Runtime.CompilerServices;
+using System.Collections.Concurrent;
 
 using Java.Interop;
 
@@ -18,16 +19,15 @@ namespace HybridKit.Android {
 		const string CallbackMethod = nameof(PostEvalResult);
 		const string Callback = CallbackGlobalObject + "." + CallbackMethod;
 
-		readonly object evalLock;
 		readonly HybridWebView webView;
 		readonly Activity dispatchActivity;
-		TaskCompletionSource<string> resultTcs;
+		readonly ConcurrentQueue<TaskCompletionSource<string>> results;
 
 		public WebViewScriptEvaluator (HybridWebView webView)
 		{
-			this.evalLock = new object ();
 			this.webView = webView;
 			this.dispatchActivity = (Activity)webView.Context;
+			this.results = new ConcurrentQueue<TaskCompletionSource<string>> ();
 			webView.AddJavascriptInterface (this, CallbackGlobalObject);
 		}
 
@@ -47,41 +47,39 @@ namespace HybridKit.Android {
 			}
 		}
 
-		public string Eval (string script)
+		async void StartEval (TaskCompletionSource<string> tcs, string script)
 		{
-			lock (evalLock) {
-				if (resultTcs != null)
-					throw new InvalidOperationException ("Eval already in progress for this WebView.");
-				if (webView.IsInWebClientFrame)
-					throw new InvalidOperationException ("Cannot call Eval within WebViewClient callback.");
+			try {
+				TaskCompletionSource<string> currentTcs = null;
+				while (results.TryPeek (out currentTcs) && (currentTcs != tcs))
+					await currentTcs.Task;
 
-				var isMainThread = Looper.MyLooper () == Looper.MainLooper;
-				if (isMainThread && !webView.CanRunScriptOnMainThread)
-					throw new InvalidOperationException ("Cannot call Eval on the main thread in this Android version.");
-
-				script = Callback + "(" + script + ")";
-				resultTcs = new TaskCompletionSource<string> ();
-				try {
-					if (isMainThread)
-						EvalNoResult (script);
-					else
-						dispatchActivity.RunOnUiThread (() => EvalNoResult (script));
-					return resultTcs.Task.Result;
-				} finally {
-					resultTcs = null;
-				}
+				EvalNoResult (script);
+			} catch (Exception ex) {
+				tcs.TrySetException (ex);
 			}
 		}
 
-		public void EvalOnMainThread (string script)
+		public async Task<string> EvalAsync (string script)
 		{
-			dispatchActivity.RunOnUiThread (() => EvalNoResult (script));
+			var myTcs = new TaskCompletionSource<string> ();
+			results.Enqueue (myTcs);
+
+			if (webView.IsInWebClientFrame) {
+				//FIXME: Is this really necessary?
+				await Task.Yield ();
+			}
+
+			script = Callback + "(" + script + ")";
+			dispatchActivity.RunOnUiThread (() => StartEval (myTcs, script));
+			return await myTcs.Task;
 		}
 
 		[Export, JavascriptInterface]
-		public void PostEvalResult (string result)
-		{
-			resultTcs.TrySetResult (result);
+		public void PostEvalResult (string result) {
+			TaskCompletionSource<string> tcs;
+			if (results.TryDequeue (out tcs))
+				tcs.TrySetResult (result);
 		}
 	}
 }

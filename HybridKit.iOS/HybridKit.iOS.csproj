@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -33,7 +33,6 @@
     <Reference Include="System.Xml" />
     <Reference Include="System.Core" />
     <Reference Include="Xamarin.iOS" />
-    <Reference Include="Microsoft.CSharp" />
     <Reference Include="Xamarin.Forms.Platform.iOS">
       <HintPath>..\packages\Xamarin.Forms.1.3.2.6316\lib\Xamarin.iOS10\Xamarin.Forms.Platform.iOS.dll</HintPath>
     </Reference>
@@ -48,8 +47,11 @@
     <Folder Include="Resources\" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Swizzled.cs" />
     <Compile Include="UIWebViewExtensions.cs" />
     <Compile Include="UIWebViewInterface.cs" />
+    <Compile Include="WKWebViewExtensions.cs" />
+    <Compile Include="WKWebViewInterface.cs" />
     <Compile Include="HybridWebViewRenderer.cs" />
     <Compile Include="ObjCExtensions.cs" />
   </ItemGroup>

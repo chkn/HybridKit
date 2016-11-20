@@ -28,7 +28,9 @@ Simple objects are passed by value. This category includes:
 Objects that do not fall into the above category can be passed by reference. This happens automatically when marshaling script objects to C#. However, on the C# side, there are a few possibilities when passing objects to script:
 
 A. The C# class is a subclass of `HybridKit.ScriptObject` and is simply a strongly-typed wrapper around an object that was exposed from script.
+
 B. The C# class and certain members are marked with the `HybridKit.ScriptableAttribute`. When an object of this class is passed to script, a proxy script object is created to expose the scriptable members.
+
 C. Individual C# methods can be marshaled as script functions using the `HybridKit.ScriptFunction` class.
 
 These scenarios are discussed in more detail in the following sections.

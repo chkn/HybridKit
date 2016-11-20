@@ -3,13 +3,13 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 
-using UIKit;
+using WebKit;
 using Foundation;
 using ObjCRuntime;
 
 namespace HybridKit {
 
-	public static class UIWebViewExtensions {
+	public static class WKWebViewExtensions {
 
 		/// <summary>
 		/// Runs the specified script, possibly asynchronously.
@@ -20,21 +20,21 @@ namespace HybridKit {
 		/// <param name="webView">Web view in which to run the script.</param>
 		/// <param name="script">A <see cref="string.Format(string, object[])"/>-style string containing the script to execute.</param>
 		/// <param name="args">Args by which to replace the placeholders in <c>script</c>.</param>
-		public static Task<T> RunScriptAsync<T> (this UIWebView webView, string script, params object [] args)
+		public static Task<T> RunScriptAsync<T> (this WKWebView webView, string script, params object [] args)
 			where T : ScriptObject
 		{
 			return webView.AsHybridWebView ().RunScriptAsync<T> (script, args);
 		}
-		public static Task<ScriptObject> RunScriptAsync (this UIWebView webView, string script, params object [] args)
+		public static Task<ScriptObject> RunScriptAsync (this WKWebView webView, string script, params object [] args)
 		{
 			return webView.RunScriptAsync<ScriptObject> (script, args);
 		}
 
 		/// <summary>
-		/// Returns an <c>IWebView</c> interface for the given <c>UIWebView</c>.
+		/// Returns an <c>IWebView</c> interface for the given <c>WKWebView</c>.
 		/// </summary>
 		/// <param name="webView">Web view for which to return the <c>IWebView</c>.</param>
-		public static IWebView AsHybridWebView (this UIWebView webView)
+		public static IWebView AsHybridWebView (this WKWebView webView)
 		{
 			return webView.GetInterface (create: true);
 		}
@@ -44,7 +44,7 @@ namespace HybridKit {
 		/// </summary>
 		/// <param name="webView">Web view in which to load the page.</param>
 		/// <param name="bundleRelativePath">Bundle-relative path of the page to load.</param>
-		public static void LoadFromBundle (this UIWebView webView, string bundleRelativePath)
+		public static void LoadFromBundle (this WKWebView webView, string bundleRelativePath)
 		{
 			var url = BundleCache.GetBundleUrl (bundleRelativePath);
 			if (url == null)
@@ -53,7 +53,7 @@ namespace HybridKit {
 			webView.LoadRequest (req);
 		}
 
-		internal static UIWebViewInterface GetInterface (this UIWebView webView, bool create)
+		internal static UIWebViewInterface GetInterface (this WKWebView webView, bool create)
 		{
 			// First, see if we've already created an interface for this webView
 			var existing = webView.GetAssociatedObject (UIWebViewInterface.Key) as UIWebViewInterface;
