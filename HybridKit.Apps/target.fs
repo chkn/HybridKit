@@ -9,6 +9,8 @@ open FSharp.Core.CompilerServices
 open ProviderImplementation
 open ProviderImplementation.ProvidedTypes
 
+type Router = string -> IHtmlView
+
 [<AutoOpen>]
 module internal AssemblyNames =
     let [<Literal>] XamariniOS       = "Xamarin.iOS"
@@ -65,25 +67,28 @@ type Target(config : TypeProviderConfig) =
     member __.Kind = kind
     member __.CreateAppType(asm, nameSpace, name) =
         let ty = ProvidedTypeDefinition(asm, nameSpace, name, Some appBaseType, IsErased = false)
+        // ctor
+        let ctor =
+            match kind with
+            | Debug ->
+                let args = [ProvidedParameter("basePath", typeof<string>)]
+                ProvidedConstructor(args, BaseConstructorCall = (fun args -> debugAppCtor, args))
+            | _ -> failwith "not yet"
+        ctor.InvokeCode <- fun _ -> <@@ () @@>
+        ty.AddMember(ctor)
         // app.Run
         let makeRunMethod args =
             let run = ProvidedMethod("Run", args, typeof<Void>)
-            run.SetMethodAttrs(MethodAttributes.Public)
-            run.InvokeCode <- target.GetAppRunExpr
+            run.SetMethodAttrs(MethodAttributes.Public ||| MethodAttributes.Static)
+            run.InvokeCode <- fun _ -> Expr.NewObject(ctor, [ Expr.Value(config.ResolutionFolder) ])
             ty.AddMember(run)
         makeRunMethod [ProvidedParameter("view", typeof<IHtmlView>)]
         makeRunMethod [ProvidedParameter("router", typeof<Router>)]
+        ty
+        (*
         let router =
             match args with
             | [view] when view.Type = typeof<IHtmlView> -> <@@ fun (_:string) -> %%view : IHtmlView @@>
             | [router] -> router
             | _ -> failwith "Unexpected arg count!"
-
-    member this.GetAppRunExpr(args : Expr list) =
-        
-        match this.Kind with
-        | Debug ->
-            let newApp = Expr.NewObject(appCtor, [ Expr.Value(config.ResolutionFolder) ])
-            <@@ (%%newApp : App).Run(%%router) @@>
-        | Android -> <@@ () @@>
-        | _ -> failwith "not yet"
+        *)

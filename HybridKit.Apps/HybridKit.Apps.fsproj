@@ -95,4 +95,10 @@
   <Target Name="AfterBuild">
   </Target>
   -->
+  <ItemGroup>
+    <Folder Include="www\" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="www\debugapp.html" />
+  </ItemGroup>
 </Project>

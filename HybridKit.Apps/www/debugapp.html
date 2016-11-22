@@ -1,0 +1,67 @@
+﻿<!DOCTYPE html>
+<html>
+	<head>
+		<title>HybridKit Debugger</title>
+	</head>
+	<body>
+		<style>
+		body {
+		  background-color: #f0f0f0;
+		}
+
+		h1 {
+		  font-size: 1.5em;
+		}
+
+		#box {
+		  font-family: "Helvetica Neue";
+		  color: #5f3f3f;
+
+		  background-color: #f5f5f5;
+		  border: 1px black;
+		  padding: 5px;
+		  padding-top: 20px;
+		  padding-left: 20px;
+		  border-radius: 10px;
+		  
+		  width: 450px;
+		  height: 140px;
+		  position: absolute;
+		  top: 0;
+		  bottom: 0;
+		  left: 0;
+		  right: 0;
+		  margin: auto;
+		}
+		</style>
+		<div id="box">
+			<h1 id="title">Error</h1>
+			<p id="reason">Your browser has JavaScript disabled.</p>
+		</div>
+		<script>
+		(function() {
+			var title = document.getElementById("title");
+			var reason = document.getElementById("reason");
+			function err(msg) {
+				title.innerText = "Error";
+				reason.innerText = msg;
+			}
+			try {
+				title.innerText = "Connecting...";
+				reason.innerText = "";
+
+				var sck = new WebSocket("ws://" + location.host + "/socket");
+				sck.onmessage = function (evt) {
+					console.log(evt.data);
+				};
+				sck.onerror = function (evt) {
+					console.log(evt);
+				};
+			} catch (e) {
+				console.log(e);
+				err("Your browser doesn't support WebSockets, or there was an issue making the connection.");
+			}
+		})();
+		</script>
+	</body>
+</html>

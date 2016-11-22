@@ -49,8 +49,7 @@ type TypeProvider (config : TypeProviderConfig) as this =
             ty
 
         let appType =
-            let ty = target.MakeAppType(asm, nameSpace, "NewApp")
-            
+            let ty = target.CreateAppType(asm, nameSpace, "NewApp")
             if not(ty.IsErased) then
                 makeProvidedAsm().AddTypes([ty])
             ty

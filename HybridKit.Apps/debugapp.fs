@@ -8,8 +8,6 @@ open System.Net
 open System.Diagnostics
 open System.Threading
 
-type Router = string -> IHtmlView
-
 /// Provides a simple debug server via HttpListener
 [<AbstractClass>]
 type App(basePath : string) =
@@ -18,20 +16,19 @@ type App(basePath : string) =
 
     [<Literal>]
     static let Endpoint = "http://localhost:8050/"
+    static let PageStream = typeof<App>.Assembly.GetManifestResourceStream("debugapp.html")
 
-
-
-    member this.Run(router : Router) =
+    do
         let listen = async {
             use listener = new HttpListener()
             listener.Prefixes.Add Endpoint
             listener.Start()
             while true do
                 let! ctx = Async.AwaitTask(listener.GetContextAsync())
-                let route = router ctx.Request.Url.LocalPath
-                using (new StreamWriter(ctx.Response.OutputStream)) (fun out ->
-                    out.WriteLine(sprintf "<HTML><BODY>Would show: %A</BODY></HTML>" route)
-                )
+                ctx.Response.ContentType <- "text/html"
+                PageStream.Position <- 0L
+                do! Async.AwaitTask(PageStream.CopyToAsync(ctx.Response.OutputStream))
+                ctx.Response.OutputStream.Dispose()
         }
         do
             use cancel = new CancellationTokenSource()
@@ -41,10 +38,9 @@ type App(basePath : string) =
             Console.WriteLine("Listening on {0}", Endpoint)
             Console.WriteLine("Press any key to exit...")
             Console.ReadKey() |> ignore
-
             cancel.Cancel()
 
-    abstract OnRun : IWebView -> unit
+    //abstract OnRun : IWebView -> unit
     interface IWebView with
         member __.Cache = failwith "nope"
         member __.Window = failwith "nope"
