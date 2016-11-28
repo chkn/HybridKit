@@ -19,6 +19,8 @@ namespace HybridKit {
 		Task<T> GetValue<T> ();
 		Task SetValue (object value);
 		Task<T> Invoke<T> (params object [] args);
+		TScriptObject InvokeLazy<TScriptObject> (params object [] args)
+			where TScriptObject : ScriptObject;
 		Task<Regex> ToRegex ();
 		Task<T []> ToArray<T> ();
 	}
@@ -102,14 +104,8 @@ namespace HybridKit {
 		/// <summary>
 		/// Gets the value of this instance.
 		/// </summary>
-		protected Task<T> GetValue<T> ()
-		{
-			return Eval<T> (refScript);
-		}
-		Task<T> IDynamicScriptObject.GetValue<T> ()
-		{
-			return GetValue<T> ();
-		}
+		protected Task<T> GetValue<T> () => Eval<T> (refScript);
+		Task<T> IDynamicScriptObject.GetValue<T> () => GetValue<T> ();
 
 		/// <summary>
 		/// Sets the value of this instance to the specified value.
@@ -130,7 +126,20 @@ namespace HybridKit {
 		/// Invokes this instance representing a JavaScript function.
 		/// </summary>
 		/// <param name="args">Arguments to the function invocation.</param>
-		protected Task<T> Invoke<T> (params object [] args)
+		protected Task<T> Invoke<T> (params object [] args) => Eval<T> (GetInvokeScript (args));
+		Task<T> IDynamicScriptObject.Invoke<T> (params object [] args) => Invoke<T> (args);
+
+		protected TScriptObject InvokeLazy<TScriptObject> (params object [] args)
+			where TScriptObject : ScriptObject
+		{
+			return AsTyped<TScriptObject> (new ScriptObject (this, GetInvokeScript (args)));
+		}
+		TScriptObject IDynamicScriptObject.InvokeLazy<TScriptObject> (params object [] args)
+		{
+			return InvokeLazy<TScriptObject> (args);
+		}
+
+		string GetInvokeScript (object [] args)
 		{
 			var sb = Ref ().Append ('(');
 			var first = true;
@@ -142,11 +151,7 @@ namespace HybridKit {
 				MarshalToScript (sb, arg);
 			}
 			sb.Append (')');
-			return Eval<T> (sb.ToString ());
-		}
-		Task<T> IDynamicScriptObject.Invoke<T> (params object [] args)
-		{
-			return Invoke<T> (args);
+			return sb.ToString ();
 		}
 
 		/// <summary>

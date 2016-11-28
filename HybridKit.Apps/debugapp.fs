@@ -10,37 +10,62 @@ open System.Threading
 
 /// Provides a simple debug server via HttpListener
 [<AbstractClass>]
-type App(basePath : string) =
+type DebugApp(basePath : string) as this =
     let loaded = Event<_,_>()
     let navigating = Event<_,_>()
+    let mutable eventWriter = None
 
     [<Literal>]
     static let Endpoint = "http://localhost:8050/"
-    static let PageStream = typeof<App>.Assembly.GetManifestResourceStream("debugapp.html")
+    static let PageStream = typeof<DebugApp>.Assembly.GetManifestResourceStream("debugapp.html")
 
+    static let printUsage() =
+        Console.WriteLine("Usage coming soon!")
+
+    let listen (listener : HttpListener) = async {
+        while true do
+            let! ctx = Async.AwaitTask(listener.GetContextAsync())
+            let resp = ctx.Response
+            try
+                match ctx.Request.Url.AbsolutePath with
+                | "/" ->
+                    resp.ContentType     <- "text/html"
+                    resp.ContentLength64 <- PageStream.Length
+                    PageStream.Position  <- 0L
+                    do! Async.AwaitTask(PageStream.CopyToAsync(resp.OutputStream))
+                    resp.OutputStream.Dispose()
+                    resp.Close()
+                | "/events" ->
+                    resp.KeepAlive   <- true
+                    resp.ContentType <- "text/event-stream"
+                    resp.AddHeader("Cache-Control", "no-cache")
+                    eventWriter <- Some(new StreamWriter(resp.OutputStream))
+                    this.OnRun(this)
+                | _ ->
+                    resp.StatusCode <- 404
+                    resp.Close()
+            with e ->
+                Console.Error.WriteLine(e)
+    }
+    let sendEvent name (msg : string) =
+        match eventWriter with
+        | Some wr -> wr.Write("event: " + name + "\n" + "data: " + msg.Replace("\n", "\ndata: ") + "\n\n")
+        | _ -> ()
     do
-        let listen = async {
-            use listener = new HttpListener()
-            listener.Prefixes.Add Endpoint
-            listener.Start()
-            while true do
-                let! ctx = Async.AwaitTask(listener.GetContextAsync())
-                ctx.Response.ContentType <- "text/html"
-                PageStream.Position <- 0L
-                do! Async.AwaitTask(PageStream.CopyToAsync(ctx.Response.OutputStream))
-                ctx.Response.OutputStream.Dispose()
-        }
-        do
-            use cancel = new CancellationTokenSource()
-            Async.StartImmediate(listen, cancel.Token)
+        use listener = new HttpListener()
+        use cancel = new CancellationTokenSource()
 
-            Process.Start Endpoint |> ignore
-            Console.WriteLine("Listening on {0}", Endpoint)
-            Console.WriteLine("Press any key to exit...")
-            Console.ReadKey() |> ignore
-            cancel.Cancel()
+        listener.Prefixes.Add Endpoint
+        listener.Start()
+        Async.StartImmediate(listen listener, cancel.Token)
 
-    //abstract OnRun : IWebView -> unit
+        Process.Start Endpoint |> ignore
+        Console.WriteLine("Listening on {0}", Endpoint)
+        Console.WriteLine("Press any key to exit...")
+        Console.ReadKey() |> ignore
+        cancel.Cancel()
+
+    abstract OnRun : IWebView -> unit
     interface IWebView with
         member __.Cache = failwith "nope"
         member __.Window = failwith "nope"

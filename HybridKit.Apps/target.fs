@@ -1,5 +1,7 @@
 ﻿namespace HybridKit.Apps
 
+open HybridKit
+
 open System
 open System.Reflection
 
@@ -9,7 +11,7 @@ open FSharp.Core.CompilerServices
 open ProviderImplementation
 open ProviderImplementation.ProvidedTypes
 
-type Router = string -> IHtmlView
+type Router = string -> HtmlView
 
 [<AutoOpen>]
 module internal AssemblyNames =
@@ -31,7 +33,7 @@ type TargetKind =
         | _ -> None
 
 type Target(config : TypeProviderConfig) =
-    static let debugAppCtor = typeof<App>.GetConstructor([| typeof<string> |])
+    static let debugAppCtor = typeof<DebugApp>.GetConstructor([| typeof<string> |])
 
     let assemblyNames = Array.map AssemblyName.GetAssemblyName config.ReferencedAssemblies
     let kind = defaultArg (Array.tryPick TargetKind.FromAssemblyName assemblyNames) Debug
@@ -60,13 +62,20 @@ type Target(config : TypeProviderConfig) =
 
     let appBaseType =
         match kind with
-        | Debug -> typeof<App>
+        | Debug -> typeof<DebugApp>
         | Ios -> failwith "Not yet"
         | Android -> load HybridKitAndroid (fun asm -> asm.GetType("HybridKit.Apps.App"))
+    let baseOnRunMethod =
+        appBaseType.GetMethod("OnRun", BindingFlags.Public ||| BindingFlags.NonPublic ||| BindingFlags.Instance)
 
     member __.Kind = kind
+
     member __.CreateAppType(asm, nameSpace, name) =
         let ty = ProvidedTypeDefinition(asm, nameSpace, name, Some appBaseType, IsErased = false)
+        // make a field to hold the router passed to App.Run
+        let routerField = ProvidedField("router", typeof<Router>)
+        routerField.SetFieldAttributes(FieldAttributes.Private ||| FieldAttributes.Static)
+        ty.AddMember(routerField)
         // ctor
         let ctor =
             match kind with
@@ -76,19 +85,38 @@ type Target(config : TypeProviderConfig) =
             | _ -> failwith "not yet"
         ctor.InvokeCode <- fun _ -> <@@ () @@>
         ty.AddMember(ctor)
-        // app.Run
+        // App.Run
         let makeRunMethod args =
             let run = ProvidedMethod("Run", args, typeof<Void>)
             run.SetMethodAttrs(MethodAttributes.Public ||| MethodAttributes.Static)
-            run.InvokeCode <- fun _ -> Expr.NewObject(ctor, [ Expr.Value(config.ResolutionFolder) ])
+            run.InvokeCode <- fun args ->
+                let router =
+                    match args with
+                    | [view] when view.Type = typeof<HtmlView> -> <@@ fun (_:string) -> %%view : HtmlView @@>
+                    | [router] -> router
+                    | _ -> failwith "Unexpected arg count!"
+                let platInit =
+                    match kind with
+                    | Debug -> Expr.NewObject(ctor, [ Expr.Value(config.ResolutionFolder) ])
+                    | _ -> <@@ () @@>
+                Expr.Sequential(Expr.FieldSet(routerField, router), platInit)
             ty.AddMember(run)
-        makeRunMethod [ProvidedParameter("view", typeof<IHtmlView>)]
+        makeRunMethod [ProvidedParameter("view", typeof<HtmlView>)]
         makeRunMethod [ProvidedParameter("router", typeof<Router>)]
+        // app.OnRun
+        let args = [ProvidedParameter("webView", typeof<IWebView>)]
+        let onRun = ProvidedMethod("OnRun", args, typeof<Void>)
+        onRun.SetMethodAttrs((baseOnRunMethod.Attributes &&& MethodAttributes.MemberAccessMask) ||| MethodAttributes.Virtual ||| MethodAttributes.HideBySig)
+        onRun.InvokeCode <- fun args ->
+            let webView =
+                match args with
+                | [_; arg] when arg.Type = typeof<IWebView> -> arg
+                | _ -> failwith "Unexpected args!"
+            let router = Expr.FieldGet(routerField)
+            <@@
+                let view = (%%router : Router) "/"
+                view.Show(%%webView)
+            @@>
+        ty.DefineMethodOverride(onRun, baseOnRunMethod)    
+        ty.AddMember(onRun)
         ty
-        (*
-        let router =
-            match args with
-            | [view] when view.Type = typeof<IHtmlView> -> <@@ fun (_:string) -> %%view : IHtmlView @@>
-            | [router] -> router
-            | _ -> failwith "Unexpected arg count!"
-        *)

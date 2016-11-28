@@ -1,7 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace HybridKit.DOM {
@@ -12,9 +9,11 @@ namespace HybridKit.DOM {
 		{
 		}
 
-		public Task<TResult> GetElementById<TResult> (string id)
+		public TResult GetElementById<TResult> (string id)
+			where TResult : Element
 		{
-			return this ["getElementById"].Invoke<TResult> (new object[] { id });
+			return this ["getElementById"].InvokeLazy<TResult> (id);
 		}
+		public Element GetElementById (string id) => GetElementById<Element> (id);
 	}
 }

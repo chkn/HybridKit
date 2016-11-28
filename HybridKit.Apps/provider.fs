@@ -1,64 +1,59 @@
 ﻿namespace HybridKit.Apps
 
-open HybridKit
+open ProviderImplementation
+open ProviderImplementation.ProvidedTypes
 
 open System
 open System.IO
 open System.Reflection
-open System.Diagnostics
+open System.Collections.Generic
 
-open FSharp.Quotations
 open FSharp.Core.CompilerServices
 
-open ProviderImplementation
-open ProviderImplementation.ProvidedTypes
-
 [<TypeProvider>]
-type TypeProvider (config : TypeProviderConfig) as this =
+type TypeProvider(config : TypeProviderConfig) as this =
     inherit TypeProviderForNamespaces()
 
-    static let [<Literal>] nameSpace = "HybridKit"
-    static let objectCtor = typeof<obj>.GetConstructor(Type.EmptyTypes)
-    static let scriptObjectCtor =
-        typeof<ScriptObject>.GetConstructor(BindingFlags.Instance ||| BindingFlags.NonPublic, null, [| typeof<ScriptObject> |], null)
-    static let showMethod = typeof<IHtmlView>.GetMethod("Show")
-
+    [<Literal>]
+    static let nameSpace = "HybridKit"
+    let invalidateTrigger = new RateLimitedTrigger()
+    let views = Dictionary<string,ViewTypeProvider>() // LOCK!
     do
+        invalidateTrigger.Triggered.Add(this.Invalidate)
+        this.Disposing.Add(fun _ -> invalidateTrigger.Dispose())
+
         let target = Target(config)
         let asm = Assembly.GetExecutingAssembly()
-        let makeProvidedAsm() =
-            Path.Combine(config.TemporaryFolder, Path.ChangeExtension("hk_" + Path.GetRandomFileName(), "dll"))
-            |> ProvidedAssembly
-
-        let implementHtmlViewType typeName path =
-            let ty = ProvidedTypeDefinition(asm, nameSpace, typeName, Some typeof<obj>, IsErased = false)
-            ty.AddInterfaceImplementation(typeof<IHtmlView>)
-            let ctor = ProvidedConstructor(List.empty)
-            ctor.BaseConstructorCall <- fun args -> objectCtor, args
-            ctor.InvokeCode <- fun _ -> <@@ () @@>
-            ty.AddMember(ctor)
-
-            let show = ProvidedMethod("IHtmlView.Show", [ProvidedParameter("webView", typeof<IWebView>)], typeof<Void>)
-            show.SetMethodAttrs(MethodAttributes.Private ||| MethodAttributes.HideBySig |||
-                MethodAttributes.NewSlot ||| MethodAttributes.Virtual ||| MethodAttributes.Final)
-            show.InvokeCode <- fun _ -> <@@ () @@>
-            ty.DefineMethodOverride(show, showMethod)
-            ty.AddMember(show)
-
-            makeProvidedAsm().AddTypes([ty])
-            ty
+        let addToProvidedAsm (ty : ProvidedTypeDefinition) =
+            if not ty.IsErased then
+                let providedAsm =
+                    Path.Combine(config.TemporaryFolder, Path.ChangeExtension("hk_" + Path.GetRandomFileName(), "dll"))
+                    |> ProvidedAssembly
+                providedAsm.AddTypes([ty])
 
         let appType =
             let ty = target.CreateAppType(asm, nameSpace, "NewApp")
-            if not(ty.IsErased) then
-                makeProvidedAsm().AddTypes([ty])
+            addToProvidedAsm ty
             ty
 
         let htmlViewType = ProvidedTypeDefinition(asm, nameSpace, "HtmlView", Some typeof<obj>, HideObjectMethods = true, IsErased = false)
         let param = ProvidedStaticParameter("fileName", typeof<string>)
         htmlViewType.DefineStaticParameters([param], fun typeName vals ->
             match vals with
-            | [| :? string as path |] -> implementHtmlViewType typeName path
+            | [| :? string as path |] ->
+                // Canonicalize path first
+                let path =
+                    if Path.IsPathRooted(path) then path else Path.Combine(config.ResolutionFolder, path)
+                    |> Path.GetFullPath
+                lock (views) (fun () ->
+                    match views.TryGetValue(path) with
+                    | true, vp -> vp.ProvidedType
+                    | _ ->
+                        let vp = ViewTypeProvider(target, invalidateTrigger, asm, nameSpace, typeName, path)
+                        views.Add(path, vp)
+                        addToProvidedAsm vp.ProvidedType
+                        vp.ProvidedType
+                )
             | _ -> failwith "impossible"
         )
 
