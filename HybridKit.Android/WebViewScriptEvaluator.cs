@@ -13,7 +13,7 @@ using Android.OS;
 
 namespace HybridKit.Android {
 
-	sealed class WebViewScriptEvaluator : Java.Lang.Object, IScriptEvaluator {
+	sealed class WebViewScriptEvaluator : Java.Lang.Object {
 
 		const string CallbackGlobalObject = "HybridKit_CallbackHandler";
 		const string CallbackMethod = nameof(PostEvalResult);
@@ -33,7 +33,7 @@ namespace HybridKit.Android {
 
 		internal void LoadHelperScript ()
 		{
-			using (var reader = new StreamReader (typeof (HybridKit).Assembly.GetManifestResourceStream ("HybridKit.HybridKit.js")))
+			using (var reader = new StreamReader (typeof (ScriptObject).Assembly.GetManifestResourceStream ("HybridKit.HybridKit.js")))
 				EvalNoResult (reader.ReadToEnd ());
 		}
 

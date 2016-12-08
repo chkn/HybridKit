@@ -7,13 +7,13 @@ namespace HybridKit {
 
 	public class ScriptFunction : IDisposable {
 
-		static int nextId;
-		static readonly Dictionary<int,ScriptFunction> functions = new Dictionary<int, ScriptFunction> ();
+		static uint nextId;
+		static readonly Dictionary<uint,ScriptFunction> functions = new Dictionary<uint, ScriptFunction> ();
 
 		object target;
 		MethodBase method;
 
-		public int Id {
+		public uint Id {
 			get;
 			private set;
 		}
@@ -48,12 +48,10 @@ namespace HybridKit {
 		{
 			lock (functions)
 				functions.Remove (Id);
-			var disposed = Disposed;
-			if (disposed != null)
-				disposed (this, EventArgs.Empty);
+			Disposed?.Invoke (this, EventArgs.Empty);
 		}
 
-		public static ScriptFunction ById (int id)
+		public static ScriptFunction ById (uint id)
 		{
 			ScriptFunction result;
 			lock (functions)
@@ -82,9 +80,7 @@ namespace HybridKit {
 			if (func == null)
 				throw new ObjectDisposedException ("ScriptFunction with Id = " + info.Id);
 
-			var buf = new StringBuilder ();
-			ScriptObject.MarshalToScript (buf, func.Invoke (info.Args));
-			result = buf.ToString ();
+			result = ScriptObject.MarshalToScript (func.Invoke (info.Args));
 			return true;
 		}
 	}

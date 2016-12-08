@@ -5,17 +5,14 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 
-using HybridKit.DOM;
-
 namespace HybridKit.Apps {
 
 	class Binding {
 		string currentValue;
-		Element element;
+		ScriptObject innerText;
 		bool dirty;
 
 		public string Value => currentValue;
-		public Element Element => element;
 
 		public Binding (string initialValue)
 		{
@@ -26,19 +23,20 @@ namespace HybridKit.Apps {
 		{
 			if (value != currentValue) {
 				currentValue = value;
-				if (element != null)
-					return element.SetInnerText (value);
+				if (innerText != null)
+					return innerText.SetValue (value);
 				dirty = true;
 			}
 			return Tasks.Completed;
 		}
 
-		public Task SetElement (Element value)
+		public Task SetElement (ScriptObject element)
 		{
-			element = value;
-			if (dirty && value != null)
-				return element.SetInnerText (currentValue);
-
+			innerText = element? ["innerText"];
+			if (dirty && innerText != null) {
+				dirty = false;
+				return innerText.SetValue (currentValue);
+			}
 			return Tasks.Completed;
 		}
 	}
@@ -56,10 +54,9 @@ namespace HybridKit.Apps {
 		const string IdPrefix = "_hkid_";
 
 		IWebView webView;
-		Document document;
 		Dictionary<string,Binding> bindings = new Dictionary<string,Binding> ();
 
-		public bool IsRendered => (document != null);
+		public bool IsRendered { get; private set; }
 		public event EventHandler<ExceptionEventArgs> ScriptException;
 
 		public async void SetBinding (string name, object value)
@@ -102,6 +99,7 @@ namespace HybridKit.Apps {
 		protected void Reload ()
 		{
 			Debug.WriteLine ("Reloading {0} ...", this);
+			IsRendered = false;
 
 			var htmlWriter = new StringWriter ();
 			RenderHtml (htmlWriter);
@@ -114,15 +112,16 @@ namespace HybridKit.Apps {
 		{
 			var curWebView = (IWebView)sender;
 			curWebView.Loaded -= WebView_Loaded;
-			document = curWebView.Window.Document;
 
 			// Get all the elements for all the bindings..
-			await Task.WhenAll (bindings.Select (kv => SetBindingElement (kv.Key, kv.Value)));
+			if (webView == curWebView)
+				await Task.WhenAll (bindings.Select (kv => SetBindingElement (kv.Key, kv.Value)));
 		}
 
 		Task SetBindingElement (string name, Binding binding)
 		{
-			return binding.SetElement (document.GetElementById (GetBindingId (name)));
+			var element = webView.EvalLazy<ScriptObject> ("document.getElementById({0})", GetBindingId (name));
+			return binding.SetElement (element);
 		}
 	}
 }

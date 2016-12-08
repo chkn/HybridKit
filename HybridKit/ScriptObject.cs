@@ -11,21 +11,7 @@ using System.Threading.Tasks;
 
 namespace HybridKit {
 
-	public interface IDynamicScriptObject {
-
-		TScriptObject MemberOrIndex<TScriptObject> (object index)
-			where TScriptObject : ScriptObject;
-		IDynamicScriptObject this [object index] { get; }
-		Task<T> GetValue<T> ();
-		Task SetValue (object value);
-		Task<T> Invoke<T> (params object [] args);
-		TScriptObject InvokeLazy<TScriptObject> (params object [] args)
-			where TScriptObject : ScriptObject;
-		Task<Regex> ToRegex ();
-		Task<T []> ToArray<T> ();
-	}
-
-	public class ScriptObject : IDynamicScriptObject {
+	public class ScriptObject {
 
 		#pragma warning disable 414
 
@@ -36,10 +22,10 @@ namespace HybridKit {
 
 		#pragma warning restore 414
 
-		IScriptEvaluator host;
+		IWebView host;
 		string refScript, disposeScript;
 
-		internal ScriptObject (IScriptEvaluator host, string refScript, string disposeScript = null)
+		internal ScriptObject (IWebView host, string refScript, string disposeScript = null)
 		{
 			if (host == null)
 				throw new ArgumentNullException ("host");
@@ -51,7 +37,7 @@ namespace HybridKit {
 			//Console.WriteLine ("CREATING: {0}", refScript);
 		}
 
-		private ScriptObject (ScriptObject parent, string refScript)
+		internal ScriptObject (ScriptObject parent, string refScript)
 			: this (parent.host, refScript)
 		{
 			this.parent = parent;
@@ -79,64 +65,47 @@ namespace HybridKit {
 		/// <summary>
 		/// Returns an object representing a member or index of this instance.
 		/// </summary>
-		protected TScriptObject MemberOrIndex<TScriptObject> (object index)
+		public TScriptObject MemberOrIndex<TScriptObject> (object index)
 			where TScriptObject : ScriptObject
 		{
 			var sb = Ref ().Append ('[');
-			MarshalToScript (sb, index);
-			return AsTyped<TScriptObject> (new ScriptObject (this, sb.Append (']').ToString ()));
-		}
-		TScriptObject IDynamicScriptObject.MemberOrIndex<TScriptObject> (object index)
-		{
-			return MemberOrIndex<TScriptObject> (index);
+			MarshalToScript (sb, index, host);
+			return AsTyped<TScriptObject> (host, new ScriptObject (this, sb.Append (']').ToString ()));
 		}
 
 		/// <summary>
 		/// Returns a <c>ScriptObject</c> representing a member or index of this instance.
 		/// </summary>
-		protected IDynamicScriptObject this [object index] {
+		public ScriptObject this [object index] {
 			get { return MemberOrIndex<ScriptObject> (index); }
-		}
-		IDynamicScriptObject IDynamicScriptObject.this [object index] {
-			get { return this [index]; }
 		}
 
 		/// <summary>
 		/// Gets the value of this instance.
 		/// </summary>
-		protected Task<T> GetValue<T> () => Eval<T> (refScript);
-		Task<T> IDynamicScriptObject.GetValue<T> () => GetValue<T> ();
+		public Task<T> GetValue<T> () => Eval<T> (host, refScript);
 
 		/// <summary>
 		/// Sets the value of this instance to the specified value.
 		/// </summary>
 		/// <param name="value">Value.</param>
-		protected Task SetValue (object value)
+		public Task SetValue (object value)
 		{
 			var sb = Ref ().Append ('=');
-			MarshalToScript (sb, value);
-			return Eval (sb.ToString ());
-		}
-		Task IDynamicScriptObject.SetValue (object value)
-		{
-			return SetValue (value);
+			MarshalToScript (sb, value, host);
+			return Eval (host, sb.ToString ());
 		}
 
 		/// <summary>
 		/// Invokes this instance representing a JavaScript function.
 		/// </summary>
 		/// <param name="args">Arguments to the function invocation.</param>
-		protected Task<T> Invoke<T> (params object [] args) => Eval<T> (GetInvokeScript (args));
-		Task<T> IDynamicScriptObject.Invoke<T> (params object [] args) => Invoke<T> (args);
+		public Task<T> Invoke<T> (params object [] args) => Eval<T> (host, GetInvokeScript (args));
 
-		protected TScriptObject InvokeLazy<TScriptObject> (params object [] args)
+		public TScriptObject InvokeLazy<TScriptObject> (params object [] args)
 			where TScriptObject : ScriptObject
 		{
-			return AsTyped<TScriptObject> (new ScriptObject (this, GetInvokeScript (args)));
-		}
-		TScriptObject IDynamicScriptObject.InvokeLazy<TScriptObject> (params object [] args)
-		{
-			return InvokeLazy<TScriptObject> (args);
+			return AsTyped<TScriptObject> (host, new ScriptObject (this, GetInvokeScript (args)));
 		}
 
 		string GetInvokeScript (object [] args)
@@ -148,7 +117,7 @@ namespace HybridKit {
 					sb.Append (',');
 				else
 					first = false;
-				MarshalToScript (sb, arg);
+				MarshalToScript (sb, arg, host);
 			}
 			sb.Append (')');
 			return sb.ToString ();
@@ -159,18 +128,14 @@ namespace HybridKit {
 		///  convert it to a C# Regex.
 		/// </summary>
 		/// <returns>The regex.</returns>
-		protected async Task<Regex> ToRegex ()
+		public async Task<Regex> ToRegex ()
 		{
 			var opts = RegexOptions.None;
 			var script = $"function(r){{return JSON.stringify([String(r.ignoreCase),String(r.multiline),r.source])}}({refScript})";
 			var jsOpts = JSON.Parse<string[]> (await host.EvalAsync (script));
 			if (jsOpts [0] == "true") opts |= RegexOptions.IgnoreCase;
 			if (jsOpts [1] == "true") opts |= RegexOptions.Multiline;
-			return new Regex (jsOpts [3], opts);
-		}
-		Task<Regex> IDynamicScriptObject.ToRegex ()
-		{
-			return ToRegex ();
+			return new Regex (jsOpts [2], opts);
 		}
 
 		/// <summary>
@@ -178,26 +143,23 @@ namespace HybridKit {
 		///  unboxes it into a C# array.
 		/// </summary>
 		/// <returns>The array.</returns>
-		protected Task<T[]> ToArray<T> ()
+		public Task<T[]> ToArray<T> ()
 		{
-			return Eval<T[]> (refScript, ScriptType.MarshalByVal);
-		}
-		Task<T []> IDynamicScriptObject.ToArray<T> ()
-		{
-			return ToArray<T> ();
+			return Eval<T[]> (host, refScript, ScriptType.MarshalByVal);
 		}
 
-		async Task<T> Eval<T> (string script, ScriptType marshalAs = default (ScriptType))
+		internal static async Task<T> Eval<T> (IWebView host, string script, ScriptType marshalAs = default (ScriptType))
 		{
-			return AsTyped<T> (await Eval (script, typeof (T), marshalAs));
+			return AsTyped<T> (host, await Eval (host, script, typeof (T), marshalAs));
 		}
-		async Task<object> Eval (string script, Type expectedType = null, ScriptType marshalAs = default (ScriptType))
+
+		internal static async Task<object> Eval (IWebView host, string script, Type expectedType = null, ScriptType marshalAs = default (ScriptType))
 		{
 			var result = await host.EvalAsync (MarshalToManaged (script, marshalAs));
-			return UnmarshalResult (result, expectedType);
+			return UnmarshalResult (host, result, expectedType);
 		}
 
-		T AsTyped<T> (object obj)
+		internal static T AsTyped<T> (IWebView host, object obj)
 		{
 			if (obj is T)
 				return (T)obj;
@@ -220,11 +182,12 @@ namespace HybridKit {
 			throw new ArgumentException ("Object cannot be converted to target type", nameof (obj));
 		}
 
-		object UnmarshalResult (string result, Type expectedType = null)
+		static object UnmarshalResult (IWebView host, string result, Type expectedType = null)
 		{
-			return UnmarshalResult (new StringReader (result), expectedType);
+			return UnmarshalResult (host, new StringReader (result), expectedType);
 		}
-		object UnmarshalResult (TextReader reader, Type expectedType = null)
+
+		static object UnmarshalResult (IWebView host, TextReader reader, Type expectedType = null)
 		{
 			var result = JSON.Parse<MarshaledValue> (reader);
 			switch (result.ScriptType) {
@@ -244,10 +207,18 @@ namespace HybridKit {
 		/// <summary>
 		/// Marshals a value that is passed into JavaScript.
 		/// </summary>
-		internal static void MarshalToScript (StringBuilder buf, object obj)
+		internal static string MarshalToScript (object obj, IWebView host = null)
+		{
+			var buf = new StringBuilder ();
+			MarshalToScript (buf, obj, host);
+			return buf.ToString ();
+		}
+		internal static void MarshalToScript (StringBuilder buf, object obj, IWebView host = null)
 		{
 			var so = obj as ScriptObject;
 			if (so != null) {
+				if (host != null && so.host != host)
+					throw new ArgumentException ("ScriptObject passed from different web view");
 				buf.Append (so.refScript);
 				return;
 			}

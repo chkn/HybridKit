@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
 
-using HybridKit.DOM;
-
 namespace HybridKit {
 
 	public class NavigatingEventArgs : EventArgs {
@@ -17,6 +15,10 @@ namespace HybridKit {
 	/// <summary>
 	/// Cross-platform interface to the native web view.
 	/// </summary>
+	/// <remarks>
+	/// Generally, implementations are also responsible for intercepting
+	///  JavaScript <c>prompt</c> calls and passing them to <c>ScriptFunction.HandlePrompt</c>.
+	/// </remarks>
 	public interface IWebView {
 
 		/// <summary>
@@ -28,13 +30,6 @@ namespace HybridKit {
 		///   a newer version of the resource exists remotely.
 		/// </remarks>
 		CachedResources Cache { get; }
-
-		/// <summary>
-		/// Gets the JavaScript global window object.
-		/// </summary>
-		Window Window { get; }
-
-		// Events:
 
 		/// <summary>
 		/// Raised when the web view has loaded its document and is ready to execute scripts.
@@ -57,20 +52,6 @@ namespace HybridKit {
 		void LoadFile (string bundleRelativePath);
 
 		void LoadString (string html, string baseUrl = null);
-	}
-
-	/// <summary>
-	/// An object that can evaluate scripts.
-	/// </summary>
-	/// <remarks>
-	/// This interface should be considered private API.
-	/// If the type implementing this interface is public,
-	/// this interface's methods should have explicit implementations.
-	/// <para>Generally, implementations are also responsible for intercepting
-	/// 	JavaScript <c>prompt</c> calls and passing them to <c>ScriptFunction.HandlePrompt</c>.
-	/// </para>
-	/// </remarks>
-	interface IScriptEvaluator {
 
 		/// <summary>
 		/// Runs the specified script in the context of the web view and returns the result.
@@ -81,6 +62,43 @@ namespace HybridKit {
 		/// <param name="script">Script to execute in the web view.</param>
 		/// <returns>Result of evaluating the script</returns>
 		Task<string> EvalAsync (string script);
+	}
+	public static class IWebViewEx {
+
+		public static async Task<TResult> EvalAsync<TResult> (this IWebView webView, string scriptFmt, params object [] args)
+		{
+			// Marshal the args.
+			var strArgs = new string [args.Length];
+			for (var i = 0; i < args.Length; i++)
+				strArgs [i] = ScriptObject.MarshalToScript (args [i], webView);
+
+			// Make the call..
+			var script = string.Format (scriptFmt, strArgs);
+			return await ScriptObject.Eval<TResult> (webView, script);
+		}
+
+		// FIXME: Allow more than one ScriptObject arg in args
+		public static TResult EvalLazy<TResult> (this IWebView webView, string scriptFmt, params object [] args)
+			where TResult : ScriptObject
+		{
+			ScriptObject parent = null;
+
+			// Marshal the args.
+			var strArgs = new string [args.Length];
+			for (var i = 0; i < args.Length; i++) {
+				var scriptObject = args [i] as ScriptObject;
+				if (scriptObject != null) {
+					if (parent != null)
+						throw new ArgumentException ("Maximum of 1 ScriptObject argument allowed currently");
+					parent = scriptObject;
+				}
+				strArgs [i] = ScriptObject.MarshalToScript (args [i], webView);
+			}
+
+			var script = string.Format (scriptFmt, strArgs);
+			var so = (parent == null)? new ScriptObject (webView, script) : new ScriptObject (parent, script);
+			return ScriptObject.AsTyped<TResult> (webView, so);
+		}
 	}
 }
 

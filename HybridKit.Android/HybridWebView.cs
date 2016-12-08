@@ -9,11 +9,11 @@ using Android.Webkit;
 using Android.Graphics;
 using Android.Net.Http;
 
-using Window = HybridKit.DOM.Window;
-
 namespace HybridKit.Android {
 
 	public class HybridWebView : WebView, IWebView {
+
+		const string AndroidAssetPrefix = "file:///android_asset/";
 
 		internal static readonly bool IsJellybeanOrOlder = (int)Build.VERSION.SdkInt < (int)BuildVersionCodes.Kitkat;
 
@@ -32,11 +32,6 @@ namespace HybridKit.Android {
 
 		public CachedResources Cache => hybridClient.Cache;
 
-		/// <summary>
-		/// Gets the JavaScript global window object.
-		/// </summary>
-		public Window Window => new Window (evaluator);
-
 		internal bool IsInWebClientFrame => hybridClient.IsInWebClientFrame;
 		internal bool CanRunScriptOnMainThread => IsJellybeanOrOlder && !IsInWebClientFrame;
 
@@ -50,13 +45,18 @@ namespace HybridKit.Android {
 
 		public void LoadFile (string bundleRelativePath)
 		{
-			var url = HybridKit.AndroidAssetPrefix + bundleRelativePath;
+			var url = AndroidAssetPrefix + bundleRelativePath;
 			LoadUrl (url);
 		}
 
 		void IWebView.LoadString (string html, string baseUrl)
 		{
-			LoadDataWithBaseURL (baseUrl ?? HybridKit.AndroidAssetPrefix, html, "text/html", "UTF-8", null);
+			LoadDataWithBaseURL (baseUrl ?? AndroidAssetPrefix, html, "text/html", "UTF-8", null);
+		}
+
+		public Task<string> EvalAsync (string script)
+		{
+			return evaluator.EvalAsync (script);
 		}
 
 		public override void SetWebViewClient (WebViewClient client)

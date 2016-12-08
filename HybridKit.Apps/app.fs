@@ -1,7 +1,6 @@
 ﻿namespace HybridKit.Apps
 
 open HybridKit
-open HybridKit.DOM
 
 open System
 open System.IO
@@ -40,25 +39,22 @@ type DebugServerSession(sck : WebSocket, cancelToken : CancellationToken) =
 
     // Start by loading the HybridKit helper script
     do
-        use reader = new StreamReader(typeof<HybridKit>.Assembly.GetManifestResourceStream("HybridKit.HybridKit.js"))
+        use reader = new StreamReader(typeof<ScriptObject>.Assembly.GetManifestResourceStream("HybridKit.HybridKit.js"))
         Async.RunSynchronously(async { let! _ = eval(reader.ReadToEnd()) in () })
 
     member this.LoadString(html : string) =
         sck.SendAsync(ArraySegment<_>(makeCall "loadHtml" html), WebSocketMessageType.Text, true, cancelToken).Wait()
         loaded.Trigger(this, EventArgs.Empty)
 
-    interface IScriptEvaluator with
-        member this.EvalAsync(script) = Async.StartAsTask(eval script, TaskCreationOptions.None, cancelToken)
-
     interface IWebView with
         member __.Cache = failwith "nope"
-        member this.Window = Window(this)
         [<CLIEvent>]
         member __.Loaded = loaded.Publish
         [<CLIEvent>]
         member __.Navigating = navigating.Publish
         member __.LoadFile(brp) = failwith "ahh"
         member this.LoadString(html, baseUrl) = this.LoadString(html)
+        member this.EvalAsync(script) = Async.StartAsTask(eval script, TaskCreationOptions.None, cancelToken)
 
 /// Provides a simple debug server via HttpListener
 [<AbstractClass>]

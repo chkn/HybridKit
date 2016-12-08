@@ -16,8 +16,6 @@ namespace HybridKit {
 		// This is what will be passed as the 'defaultValue' argument to the JavaScript 'prompt'
 		//  function to indicate that we are to handle it specially as a callback into C#.
 		public const string PromptHookDefaultValue = "@HKCallback$";
-
-		internal const string AndroidAssetPrefix = "file:///android_asset/";
 	}
 
 	enum ScriptType {
@@ -38,7 +36,7 @@ namespace HybridKit {
 	}
 
 	struct PromptCallback {
-		[XmlPreserve] public int Id { get; set; }
+		[XmlPreserve] public uint Id { get; set; }
 		[XmlPreserve] public object [] Args { get; set; }
 	}
 }
