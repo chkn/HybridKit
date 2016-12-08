@@ -18,8 +18,12 @@ namespace HybridKit {
 		{
 			// Hack to add JS stack trace to the exception..
 			object trace;
-			if (errorDict != null && RemoteStackTraceString != null && errorDict.TryGetValue ("stack", out trace))
-				RemoteStackTraceString.SetValue (this, Environment.NewLine + trace.ToString ());
+			if (errorDict != null && RemoteStackTraceString != null && errorDict.TryGetValue ("stack", out trace)) {
+				var traceStr = Environment.NewLine + trace.ToString ();
+				if (!traceStr.EndsWith (Environment.NewLine, StringComparison.Ordinal))
+					traceStr += Environment.NewLine;
+				RemoteStackTraceString.SetValue (this, traceStr);
+			}
 		}
 
 		static string GetMessage (IDictionary<string,object> errorDict)

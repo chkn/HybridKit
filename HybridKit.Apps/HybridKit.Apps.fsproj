@@ -1,4 +1,5 @@
-﻿<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -23,12 +24,13 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
     <PlatformTarget>AnyCPU</PlatformTarget>
-    <DocumentationFile>bin\Debug\HybridKit.Views.XML</DocumentationFile>
+    <DocumentationFile>
+    </DocumentationFile>
     <Prefer32Bit>true</Prefer32Bit>
     <StartAction>Program</StartAction>
-    <StartProgram>C:\Program Files (x86)\Microsoft SDKs\F#\4.0\Framework\v4.0\Fsc.exe</StartProgram>
+    <StartProgram>C:\Program Files (x86)\Microsoft SDKs\F#\4.0\Framework\v4.0\Fsi.exe</StartProgram>
     <StartWorkingDirectory>C:\Users\alex\Documents\Projects\HybridKit\Samples\Test\</StartWorkingDirectory>
-    <StartArguments>Test.fsx</StartArguments>
+    <StartArguments>/use:Test.fsx</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -38,7 +40,8 @@
     <DefineConstants>TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
     <PlatformTarget>AnyCPU</PlatformTarget>
-    <DocumentationFile>bin\Release\HybridKit.Views.XML</DocumentationFile>
+    <DocumentationFile>
+    </DocumentationFile>
     <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup>
@@ -67,15 +70,17 @@
     <Compile Include="../packages/FSharp.TypeProviders.StarterPack.1.1.3.88/content/DebugProvidedTypes.fs">
       <Link>ProvidedTypes\DebugProvidedTypes.fs</Link>
     </Compile>
+    <Compile Include="util.fs" />
     <Compile Include="trigger.fs" />
     <Compile Include="interpolate.fs" />
     <Compile Include="extensions.fs" />
     <Compile Include="markup.fs" />
-    <Compile Include="debugapp.fs" />
+    <Compile Include="app.fs" />
     <Compile Include="target.fs" />
     <Compile Include="view.fs" />
     <Compile Include="provider.fs" />
     <Content Include="packages.config" />
+    <EmbeddedResource Include="www\index.html" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="mscorlib" />
@@ -84,8 +89,6 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\HybridKit\HybridKit.csproj">
       <Name>HybridKit</Name>
       <Project>{d62f445d-b668-417a-aef2-d91e63c2cde5}</Project>
@@ -99,10 +102,4 @@
   <Target Name="AfterBuild">
   </Target>
   -->
-  <ItemGroup>
-    <Folder Include="www\" />
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="www\debugapp.html" />
-  </ItemGroup>
 </Project>

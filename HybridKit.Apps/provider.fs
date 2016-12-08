@@ -16,10 +16,16 @@ type TypeProvider(config : TypeProviderConfig) as this =
 
     [<Literal>]
     static let nameSpace = "HybridKit"
-    let invalidateTrigger = new RateLimitedTrigger()
     let views = Dictionary<string,ViewTypeProvider>() // LOCK!
+
+    let invalidateTrigger = new RateLimitedTrigger(Delay = TimeSpan.Zero)
     do
-        invalidateTrigger.Triggered.Add(this.Invalidate)
+        if not config.IsInvalidationSupported && FSI.isRepl config.IsHostedExecution then
+            printfn "NOTE: Type provider invalidation is not supported in this session."
+            printfn "You will need to re-evaluate HtmlView declarations and instantiations"
+            printfn "if you add new bindings to the associated HTML files."
+        else
+            invalidateTrigger.Triggered.Add(this.Invalidate)
         this.Disposing.Add(fun _ -> invalidateTrigger.Dispose())
 
         let target = Target(config)
@@ -43,16 +49,19 @@ type TypeProvider(config : TypeProviderConfig) as this =
             | [| :? string as path |] ->
                 // Canonicalize path first
                 let path =
-                    if Path.IsPathRooted(path) then path else Path.Combine(config.ResolutionFolder, path)
+                    config.ResolutionFolder
+                    |> FS.resolvePath path
                     |> Path.GetFullPath
                 lock (views) (fun () ->
-                    match views.TryGetValue(path) with
-                    | true, vp -> vp.ProvidedType
-                    | _ ->
-                        let vp = ViewTypeProvider(target, invalidateTrigger, asm, nameSpace, typeName, path)
-                        views.Add(path, vp)
-                        addToProvidedAsm vp.ProvidedType
-                        vp.ProvidedType
+                    let viewType =
+                        match views.TryGetValue(path) with
+                        | true, vp -> vp.CreateViewType(asm, nameSpace, typeName)
+                        | _ ->
+                            let vp = ViewTypeProvider(target, invalidateTrigger, path)
+                            views.Add(path, vp)
+                            vp.CreateViewType(asm, nameSpace, typeName)
+                    addToProvidedAsm viewType
+                    viewType
                 )
             | _ -> failwith "impossible"
         )

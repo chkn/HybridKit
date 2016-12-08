@@ -21,22 +21,24 @@ module internal AssemblyNames =
     let [<Literal>] HybridKitAndroid = "HybridKit.Android"
 
 type TargetKind =
-    | Debug
-    | Ios
-    | Android
+    | DebugServer
     static member FromAssemblyName(an : AssemblyName) =
         match an.Name with
+        (*
         | XamariniOS
         | HybridKitiOS -> Some Ios
         | XamarinAndroid
         | HybridKitAndroid -> Some Android
+        *)
         | _ -> None
 
 type Target(config : TypeProviderConfig) =
-    static let debugAppCtor = typeof<DebugApp>.GetConstructor([| typeof<string> |])
+    static let debugServerAppCtor = typeof<DebugServerApp>.GetConstructor([| typeof<string>; typeof<bool> |])
 
+    // Try to determine what platform we're targeting by looking at the referenced assemblies.
+    //  If none of our other targets are specified then become a debug server.
     let assemblyNames = Array.map AssemblyName.GetAssemblyName config.ReferencedAssemblies
-    let kind = defaultArg (Array.tryPick TargetKind.FromAssemblyName assemblyNames) Debug
+    let kind = defaultArg (Array.tryPick TargetKind.FromAssemblyName assemblyNames) DebugServer
 
     // Assembly Loading
     let resolveHandler = ResolveEventHandler(fun _ evt -> 
@@ -62,9 +64,8 @@ type Target(config : TypeProviderConfig) =
 
     let appBaseType =
         match kind with
-        | Debug -> typeof<DebugApp>
-        | Ios -> failwith "Not yet"
-        | Android -> load HybridKitAndroid (fun asm -> asm.GetType("HybridKit.Apps.App"))
+        | DebugServer -> typeof<DebugServerApp>
+        //| Android -> load HybridKitAndroid (fun asm -> asm.GetType("HybridKit.Apps.App"))
     let baseOnRunMethod =
         appBaseType.GetMethod("OnRun", BindingFlags.Public ||| BindingFlags.NonPublic ||| BindingFlags.Instance)
 
@@ -78,31 +79,13 @@ type Target(config : TypeProviderConfig) =
         ty.AddMember(routerField)
         // ctor
         let ctor =
+            let basePathCtor ctor =
+                let args = [ProvidedParameter("basePath", typeof<string>); ProvidedParameter("isFsi", typeof<bool>)]
+                ProvidedConstructor(args, BaseConstructorCall = (fun args -> ctor, args))
             match kind with
-            | Debug ->
-                let args = [ProvidedParameter("basePath", typeof<string>)]
-                ProvidedConstructor(args, BaseConstructorCall = (fun args -> debugAppCtor, args))
-            | _ -> failwith "not yet"
+            | DebugServer -> basePathCtor debugServerAppCtor
         ctor.InvokeCode <- fun _ -> <@@ () @@>
         ty.AddMember(ctor)
-        // App.Run
-        let makeRunMethod args =
-            let run = ProvidedMethod("Run", args, typeof<Void>)
-            run.SetMethodAttrs(MethodAttributes.Public ||| MethodAttributes.Static)
-            run.InvokeCode <- fun args ->
-                let router =
-                    match args with
-                    | [view] when view.Type = typeof<HtmlView> -> <@@ fun (_:string) -> %%view : HtmlView @@>
-                    | [router] -> router
-                    | _ -> failwith "Unexpected arg count!"
-                let platInit =
-                    match kind with
-                    | Debug -> Expr.NewObject(ctor, [ Expr.Value(config.ResolutionFolder) ])
-                    | _ -> <@@ () @@>
-                Expr.Sequential(Expr.FieldSet(routerField, router), platInit)
-            ty.AddMember(run)
-        makeRunMethod [ProvidedParameter("view", typeof<HtmlView>)]
-        makeRunMethod [ProvidedParameter("router", typeof<Router>)]
         // app.OnRun
         let args = [ProvidedParameter("webView", typeof<IWebView>)]
         let onRun = ProvidedMethod("OnRun", args, typeof<Void>)
@@ -119,4 +102,21 @@ type Target(config : TypeProviderConfig) =
             @@>
         ty.DefineMethodOverride(onRun, baseOnRunMethod)    
         ty.AddMember(onRun)
+        // App.Run
+        let makeRunMethod args =
+            let run = ProvidedMethod("Run", args, typeof<Void>)
+            run.SetMethodAttrs(MethodAttributes.Public ||| MethodAttributes.Static)
+            run.InvokeCode <- fun args ->
+                let router =
+                    match args with
+                    | [view] when view.Type = typeof<HtmlView> -> <@@ fun (_:string) -> %%view : HtmlView @@>
+                    | [router] -> router
+                    | _ -> failwith "Unexpected arg count!"
+                let platInit =
+                    match kind with
+                    | DebugServer -> Expr.NewObject(ctor, [ Expr.Value(config.ResolutionFolder); Expr.Value(config.IsHostedExecution) ])
+                Expr.Sequential(Expr.FieldSet(routerField, router), platInit)
+            ty.AddMember(run)
+        makeRunMethod [ProvidedParameter("view", typeof<HtmlView>)]
+        makeRunMethod [ProvidedParameter("router", typeof<Router>)]
         ty

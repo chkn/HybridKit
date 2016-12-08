@@ -43,6 +43,7 @@
     <Compile Include="ScriptableAttribute.cs" />
     <Compile Include="ScriptFunction.cs" />
     <Compile Include="Apps\HtmlView.cs" />
+    <Compile Include="Tasks.cs" />
     <EmbeddedResource Include="HybridKit.js" />
     <Compile Include="DOM\Element.cs" />
   </ItemGroup>

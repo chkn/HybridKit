@@ -1,4 +1,4 @@
-﻿namespace HybridKit.Apps
+﻿namespace HybridKit.Apps.Markup
 
 open System
 open System.IO
@@ -18,7 +18,7 @@ module internal Extensions =
             | chr -> buf.Append(chr)      |> ignore
             String.iter mapping str
             buf
-            
+
         member buf.ToStringAndClear() =
             let result = buf.ToString()
             buf.Clear() |> ignore

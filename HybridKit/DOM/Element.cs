@@ -9,10 +9,7 @@ namespace HybridKit.DOM {
 		{
 		}
 
-		public string InnerText {
-			set { this ["innerText"].SetValue (value); }
-		}
 		public Task<string> GetInnerText () => this ["innerText"].GetValue<string> ();
-
+		public Task SetInnerText (string value) => this ["innerText"].SetValue (value);
 	}
 }

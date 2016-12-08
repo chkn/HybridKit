@@ -1,4 +1,4 @@
-﻿namespace HybridKit.Apps
+﻿namespace HybridKit.Apps.Markup
 
 open System
 open System.Text

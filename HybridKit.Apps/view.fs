@@ -1,5 +1,7 @@
 ﻿namespace HybridKit.Apps
 
+open HybridKit.Apps.Markup
+
 open System
 open System.IO
 open System.Reflection
@@ -9,18 +11,6 @@ open FSharp.Quotations
 
 open ProviderImplementation
 open ProviderImplementation.ProvidedTypes
-
-module internal FS =
-    let createWatcher filePath =
-        new FileSystemWatcher(Path.GetDirectoryName(filePath), Path.GetFileName(filePath), NotifyFilter = NotifyFilters.LastWrite)
-
-    let openShared filePath =
-        let stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
-        new StreamReader(stream)
-
-    let loadTree filePath =
-        use reader = openShared filePath
-        Tree.fromMarkupReader "html" reader
 
 type DebugHtmlView(filePath : string) as this =
     inherit HtmlView()
@@ -40,11 +30,11 @@ type DebugHtmlView(filePath : string) as this =
 
     override __.ToString() = filePath
     override this.RenderHtml(writer) =
-        let tree = FS.loadTree filePath
+        let tree = Tree.fromMarkupFile "html" filePath
         let html = toMarkup tree
         writer.Write(html)
 
-type ViewTypeProvider(target : Target, invalidate : ITrigger, asm, nameSpace, name, filePath) =
+type ViewTypeProvider(target : Target, invalidate : ITrigger, filePath) =
     static let htmlViewCtor =
         typeof<HtmlView>.GetConstructor(BindingFlags.Public ||| BindingFlags.NonPublic ||| BindingFlags.Instance, null, Type.EmptyTypes, null)
     static let debugHtmlViewCtor =
@@ -63,7 +53,7 @@ type ViewTypeProvider(target : Target, invalidate : ITrigger, asm, nameSpace, na
         | Elem(_, attrs, children) ->
             let lst = Map.fold (fun lst _ v -> iter1 lst v) lst attrs
             Seq.fold iter2 lst children
-        let (Tree(_, root)) = FS.loadTree filePath
+        let (Tree(_, root)) = Tree.fromMarkupFile "html" filePath
         iter2 [] root
     let localInvalidate = new RateLimitedTrigger()
     do
@@ -76,17 +66,18 @@ type ViewTypeProvider(target : Target, invalidate : ITrigger, asm, nameSpace, na
         watcher.EnableRaisingEvents <- true
         localInvalidate.Trigger()
 
-    let providedType =
+    member __.CreateViewType(asm, nameSpace, name) =
         let baseType, baseCtorCall =
             match target.Kind with
-            | Debug -> typeof<DebugHtmlView>, (fun args -> debugHtmlViewCtor, args @ [Expr.Value(filePath)])
-            | _ -> typeof<HtmlView>, (fun args -> htmlViewCtor, args)
+            | DebugServer -> typeof<DebugHtmlView>, (fun args -> debugHtmlViewCtor, args @ [Expr.Value(filePath)])
+            //| _ -> typeof<HtmlView>, (fun args -> htmlViewCtor, args)
+
         let ty = ProvidedTypeDefinition(asm, nameSpace, name, Some baseType, IsErased = false)
         let ctor = ProvidedConstructor(List.empty)
         ctor.BaseConstructorCall <- baseCtorCall
         ctor.InvokeCode <- fun _ -> <@@ () @@>
         ty.AddMember(ctor)
-        
+
         // Binding members
         bindings
         |> List.iter (function
@@ -107,7 +98,8 @@ type ViewTypeProvider(target : Target, invalidate : ITrigger, asm, nameSpace, na
 
         // RenderHtml
         match target.Kind with
-        | Debug -> ()
+        | DebugServer -> ()
+        (*
         | _ ->
             let render = ProvidedMethod("RenderHtml", [ProvidedParameter("writer", typeof<TextWriter>)], typeof<Void>)
             render.SetMethodAttrs(MethodAttributes.Family ||| MethodAttributes.HideBySig ||| MethodAttributes.Virtual ||| MethodAttributes.Final)
@@ -119,6 +111,5 @@ type ViewTypeProvider(target : Target, invalidate : ITrigger, asm, nameSpace, na
                 <@@ printfn "Would render in %A" (%%writer : TextWriter)  @@>
             ty.DefineMethodOverride(render, renderMethod)
             ty.AddMember(render)
+        *)
         ty
-
-    member __.ProvidedType = providedType
