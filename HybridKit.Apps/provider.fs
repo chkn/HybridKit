@@ -1,5 +1,7 @@
 ﻿namespace HybridKit.Apps
 
+open HybridKit.Apps.Build
+
 open ProviderImplementation
 open ProviderImplementation.ProvidedTypes
 
@@ -17,10 +19,22 @@ type TypeProvider(config : TypeProviderConfig) as this =
     [<Literal>]
     static let nameSpace = "HybridKit"
     let views = Dictionary<string,ViewTypeProvider>() // LOCK!
-
     let invalidateTrigger = new RateLimitedTrigger(Delay = TimeSpan.Zero)
+
     do
-        if not config.IsInvalidationSupported && FSI.isRepl config.IsHostedExecution then
+        // First evaluate our launch environment
+        let isRepl = FSI.isRepl config.IsHostedExecution
+        let target =
+            if config.IsHostedExecution && not isRepl then
+                match Cli.parseArgs<TargetKind>() with
+                | Some(target) when target <> DebugServer ->
+                    Build.createProjectAndExit target
+                | _ ->
+                    Target(config, DebugServer)
+            else
+                Target(config)
+
+        if not config.IsInvalidationSupported && isRepl then
             printfn "NOTE: Type provider invalidation is not supported in this session."
             printfn "You will need to re-evaluate HtmlView declarations and instantiations"
             printfn "if you add new bindings to the associated HTML files."
@@ -28,7 +42,6 @@ type TypeProvider(config : TypeProviderConfig) as this =
             invalidateTrigger.Triggered.Add(this.Invalidate)
         this.Disposing.Add(fun _ -> invalidateTrigger.Dispose())
 
-        let target = Target(config)
         let asm = Assembly.GetExecutingAssembly()
         let addToProvidedAsm (ty : ProvidedTypeDefinition) =
             if not ty.IsErased then
@@ -43,27 +56,26 @@ type TypeProvider(config : TypeProviderConfig) as this =
             ty
 
         let htmlViewType = ProvidedTypeDefinition(asm, nameSpace, "HtmlView", Some typeof<obj>, HideObjectMethods = true, IsErased = false)
-        let param = ProvidedStaticParameter("fileName", typeof<string>)
-        htmlViewType.DefineStaticParameters([param], fun typeName vals ->
-            match vals with
-            | [| :? string as path |] ->
-                // Canonicalize path first
-                let path =
-                    config.ResolutionFolder
-                    |> FS.resolvePath path
-                    |> Path.GetFullPath
-                lock (views) (fun () ->
-                    let viewType =
-                        match views.TryGetValue(path) with
-                        | true, vp -> vp.CreateViewType(asm, nameSpace, typeName)
-                        | _ ->
-                            let vp = ViewTypeProvider(target, invalidateTrigger, path)
-                            views.Add(path, vp)
-                            vp.CreateViewType(asm, nameSpace, typeName)
-                    addToProvidedAsm viewType
-                    viewType
-                )
-            | _ -> failwith "impossible"
+        let pmtrs = [ ProvidedStaticParameter("fileNameOrPath", typeof<string>); ProvidedStaticParameter("fileName", typeof<string>, "") ]
+        htmlViewType.DefineStaticParameters(pmtrs, fun typeName vals ->
+            let path =
+                match vals with
+                | [| :? string as path; :? string as fileName |] -> Path.Combine(path, fileName)
+                | [| :? string as path |] -> path
+                | _ -> failwith "impossible"
+                |> FS.resolvePath config.ResolutionFolder
+                |> Path.GetFullPath
+            lock (views) (fun () ->
+                let viewType =
+                    match views.TryGetValue(path) with
+                    | true, vp -> vp.CreateViewType(asm, nameSpace, typeName)
+                    | _ ->
+                        let vp = ViewTypeProvider(target, invalidateTrigger, path)
+                        views.Add(path, vp)
+                        vp.CreateViewType(asm, nameSpace, typeName)
+                addToProvidedAsm viewType
+                viewType
+            )
         )
 
         let types = [

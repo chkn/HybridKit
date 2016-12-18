@@ -30,7 +30,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GuiUnit_iOS", "Tests\guiuni
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GuiUnit_Android", "Tests\guiunit\src\framework\GuiUnit_Android\GuiUnit_Android.csproj", "{C33A73F1-1CEC-4550-97B9-E7571E9AF4E6}"
 EndProject
-Project("{f2a71f9b-5d33-465a-a702-920d77279786}") = "HybridKit.Apps", "HybridKit.Apps\HybridKit.Apps.fsproj", "{B13BAA9E-28C5-44C9-9C30-DB75093EC4A9}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "HybridKit.Apps", "HybridKit.Apps\HybridKit.Apps.fsproj", "{B13BAA9E-28C5-44C9-9C30-DB75093EC4A9}"
 EndProject
 Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution

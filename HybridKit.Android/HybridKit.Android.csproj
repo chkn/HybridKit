@@ -14,7 +14,8 @@
     <AndroidUseLatestPlatformSdk>False</AndroidUseLatestPlatformSdk>
     <AssemblyName>HybridKit.Android</AssemblyName>
     <TargetFrameworkVersion>v4.4</TargetFrameworkVersion>
-    <AndroidTlsProvider></AndroidTlsProvider>
+    <AndroidTlsProvider>
+    </AndroidTlsProvider>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -48,9 +49,6 @@
     <Compile Include="HybridWebView.cs" />
     <Compile Include="Apps\App.cs" />
     <Compile Include="WebViewScriptEvaluator.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="Resources\AboutResources.txt" />
   </ItemGroup>
   <ItemGroup>
     <AndroidResource Include="Resources\values\Strings.xml" />

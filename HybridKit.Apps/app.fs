@@ -16,6 +16,9 @@ type DebugServerSession(sck : WebSocket, cancelToken : CancellationToken) =
     let loaded = Event<_,_>()
     let navigating = Event<_,_>()
 
+    // We can only have one active eval at a time
+    let evalSema = new SemaphoreSlim(1, 1)
+
     static let makeCall (fnName : string) (arg : obj) =
         let buf = StringBuilder(fnName).Append('(')
         JSON.Stringify(arg, buf)
@@ -33,8 +36,12 @@ type DebugServerSession(sck : WebSocket, cancelToken : CancellationToken) =
         return Encoding.UTF8.GetString(buffer)
     }
     let eval (script : string) = async {
-        do! Async.AwaitTask(sck.SendAsync(ArraySegment<_>(makeCall "evalScript" script), WebSocketMessageType.Text, true, cancelToken))
-        return! receive()
+        do! Async.AwaitTask(evalSema.WaitAsync())
+        try
+            do! Async.AwaitTask(sck.SendAsync(ArraySegment<_>(makeCall "evalScript" script), WebSocketMessageType.Text, true, cancelToken))
+            return! receive()
+        finally
+            ignore(evalSema.Release())
     }
 
     // Start by loading the HybridKit helper script

@@ -179,7 +179,7 @@ namespace HybridKit {
 			if (typeof (T).GetTypeInfo ().IsAssignableFrom (typeof (ScriptObject).GetTypeInfo ()))
 				return (T)(object)new ScriptObject (host, JSON.Stringify (obj));
 
-			throw new ArgumentException ("Object cannot be converted to target type", nameof (obj));
+			return (T)Convert.ChangeType (obj, typeof (T));
 		}
 
 		static object UnmarshalResult (IWebView host, string result, Type expectedType = null)

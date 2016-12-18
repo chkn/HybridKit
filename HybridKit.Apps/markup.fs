@@ -5,40 +5,35 @@ open System.IO
 open System.Text
 open System.Collections.Generic
 
-type attributes = Map<string,InterpolatedString>
-
 type Node =
     | Elem of string * attributes * Node list
     | Text of InterpolatedString
 
 type Declaration =
     | Doctype of string
-    | XML of attributes
+    | XML of string
 
 type Tree = Tree of Declaration option * root:Node
+
+type VisitResponse =
+    | Ignore
+    | Visit
+    | Replace of Node list
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Tree =
 
     // FIXME: Fully implement escape/unescape
 
-    type StringBuilder with
-        member buf.AppendAttrs(attrs : attributes, fn) =
-            attrs |> Map.iter (fun k v ->
-                    buf.Append(' ').Append(k) |> ignore
-                    match v with
-                    | Empty -> ()
-                    | value -> buf.Append("=\"").AppendHtmlEscaped(fn value).Append('"') |> ignore //"
-            )
-            buf
-
-    let visit (fn : Node -> Node list option) (Tree(decl, root)) =
+    let visit fn (Tree(decl, root)) =
         let rec visitNode node =
             match fn node with
-            | Some replacement -> replacement
-            | _ -> match node with
-                   | Elem(name, attrs, children) -> [Elem(name, attrs, List.collect visitNode children)]
-                   | other -> [other]
+            | Ignore -> [node]
+            | Replace replacement -> replacement
+            | Visit ->
+                match node with
+                | Elem(name, attrs, children) -> [Elem(name, attrs, List.collect visitNode children)]
+                | other -> [other]
         Tree(decl, List.exactlyOne(visitNode root))
 
     /// Converts the Tree to markup using a custom interpolator
@@ -47,12 +42,12 @@ module Tree =
         match decl with
         | None -> ()
         | Some(Doctype doctype) -> buf.Append("<!DOCTYPE ").Append(doctype).AppendLine(">") |> ignore
-        | Some(XML attrs) -> buf.Append("<?xml").AppendAttrs(attrs, fn).AppendLine("?>") |> ignore
+        | Some(XML xml) -> buf.Append("<?xml ").Append(xml).AppendLine("?>") |> ignore
         let rec iter = function
         | Text str -> buf.AppendHtmlEscaped(fn str) |> ignore
         | Elem (name, attrs, children) ->
             buf.Append('<').Append(name).AppendAttrs(attrs, fn).Append('>') |> ignore
-            children |> Seq.iter iter
+            children |> List.iter iter
             buf.Append("</").Append(name).Append('>') |> ignore
         iter root
         buf.ToString()
@@ -65,7 +60,7 @@ module Tree =
         let rec readAttrs (map : attributes) =
             tr.ConsumeWhitespace()
             match tr.Peek() with
-            | -1 | 62(*'>'*) | 63(*'?'*) -> map
+            | -1 | 62(*'>'*) | 63(*'?'*) | 47(*/*) -> map
             | _ ->
                 let name = tr.ReadUntil (fun c -> c = '=' || c = '>' || Char.IsWhiteSpace(c))
                 tr.ConsumeWhitespace()
@@ -88,26 +83,34 @@ module Tree =
                 tr.ConsumeIf '>' |> ignore
                 Some(Doctype value)
             | '?' when tr.ConsumeIf "?xml" ->
-                let value = readAttrs Map.empty
+                let value = tr.ReadUntil(function '?' | '>' -> true | _ -> false)
                 tr.ConsumeIf '?' |> ignore
                 tr.ConsumeIf '>' |> ignore
                 Some(XML value)
             | _ -> None
 
-        let rec readTree() =
+        let rec readTree(decl) =
             tr.ConsumeWhitespace()
             match tr.Peek() with
             | -1        -> ()
-            | 60(*'<'*) -> readElem(); readTree()
-            | _         -> readText(); readTree()
+            | 60(*'<'*) -> readElem(decl); readTree(decl)
+            | _         -> readText(); readTree(decl)
 
-        and readElem() =
+        and readElem(decl) =
             tr.ConsumeWhitespaceAnd '<'
             let closing = tr.ConsumeIf '/'
+            let comment = tr.ConsumeIf '!'
+            // FIXME: ConsumeUntil implementation will not detect "--->"
+            if comment then tr.ConsumeUntil("-->") else
             tr.ConsumeWhitespace()
-            let name = (tr.ReadUntil (fun c -> c = '>' || Char.IsWhiteSpace(c))).ToLowerInvariant()
+            let name =
+                let nm = tr.ReadUntil(fun c -> c = '>' || Char.IsWhiteSpace(c))
+                match decl with
+                | Some(XML _) -> nm
+                | _ -> nm.ToLowerInvariant()
             if not(String.IsNullOrEmpty(name)) then
                 let attrs = readAttrs Map.empty
+                tr.ConsumeIf '/' |> ignore
                 tr.ConsumeIf '>' |> ignore
                 if closing then
                     // pop back to opening tag and er'ybody under that gets parented there
@@ -137,7 +140,7 @@ module Tree =
             
         tr.ConsumeWhitespace()
         let decl = readDecl()
-        readTree()
+        readTree(decl)
 
         let root =
             match stack.Count with

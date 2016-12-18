@@ -9,7 +9,9 @@ namespace HybridKit.Apps {
 
 	class Binding {
 		string currentValue;
-		ScriptObject innerText;
+
+		IWebView webView;
+		ScriptObject elements;
 		bool dirty;
 
 		public string Value => currentValue;
@@ -23,22 +25,26 @@ namespace HybridKit.Apps {
 		{
 			if (value != currentValue) {
 				currentValue = value;
-				if (innerText != null)
-					return innerText.SetValue (value);
+				if (elements != null)
+					return ApplyValue ();
 				dirty = true;
 			}
 			return Tasks.Completed;
 		}
 
-		public Task SetElement (ScriptObject element)
+		public Task SetElements (IWebView webView, ScriptObject elements)
 		{
-			innerText = element? ["innerText"];
-			if (dirty && innerText != null) {
+			this.webView = webView;
+			this.elements = elements;
+			if (dirty && elements != null) {
 				dirty = false;
-				return innerText.SetValue (currentValue);
+				return ApplyValue ();
 			}
 			return Tasks.Completed;
 		}
+
+		Task ApplyValue ()
+			=> webView.EvalAsync<string> ("function(a){{var i=a.length;while(i--)a[i].innerText={0};}}({1})", currentValue, elements);
 	}
 
 	public class ExceptionEventArgs : EventArgs {
@@ -56,6 +62,7 @@ namespace HybridKit.Apps {
 		IWebView webView;
 		Dictionary<string,Binding> bindings = new Dictionary<string,Binding> ();
 
+		bool wasRendered;
 		public bool IsRendered { get; private set; }
 		public event EventHandler<ExceptionEventArgs> ScriptException;
 
@@ -69,7 +76,7 @@ namespace HybridKit.Apps {
 				} else {
 					bindings.Add (name, binding = new Binding (strValue));
 					if (IsRendered)
-						await SetBindingElement (name, binding);
+						await SetBindingElements (name, binding);
 				}
 			} catch (Exception ex) {
 				var handler = ScriptException;
@@ -85,7 +92,7 @@ namespace HybridKit.Apps {
 			return bindings.TryGetValue (name, out binding)? binding.Value : null;
 		}
 
-		protected virtual string GetBindingId (string name) => IdPrefix + name;
+		public static string GetBindingId (string name) => IdPrefix + name;
 		protected abstract void RenderHtml (TextWriter writer);
 
 		public void Show (IWebView webView)
@@ -98,7 +105,7 @@ namespace HybridKit.Apps {
 
 		protected void Reload ()
 		{
-			Debug.WriteLine ("Reloading {0} ...", this);
+			wasRendered = IsRendered;
 			IsRendered = false;
 
 			var htmlWriter = new StringWriter ();
@@ -114,14 +121,16 @@ namespace HybridKit.Apps {
 			curWebView.Loaded -= WebView_Loaded;
 
 			// Get all the elements for all the bindings..
-			if (webView == curWebView)
-				await Task.WhenAll (bindings.Select (kv => SetBindingElement (kv.Key, kv.Value)));
+			if (!wasRendered && webView == curWebView)
+				await Task.WhenAll (bindings.Select (kv => SetBindingElements (kv.Key, kv.Value)));
+
+			IsRendered = true;
 		}
 
-		Task SetBindingElement (string name, Binding binding)
+		async Task SetBindingElements (string name, Binding binding)
 		{
-			var element = webView.EvalLazy<ScriptObject> ("document.getElementById({0})", GetBindingId (name));
-			return binding.SetElement (element);
+			var elements = await webView.EvalAsync<ScriptObject> ("document.getElementsByClassName({0})", GetBindingId (name));
+			await binding.SetElements (webView, elements);
 		}
 	}
 }

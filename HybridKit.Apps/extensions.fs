@@ -4,19 +4,32 @@ open System
 open System.IO
 open System.Text
 
+type attributes = Map<string,InterpolatedString>
+
 [<AutoOpen>]
 module internal Extensions =
+
+    let htmlEscape = function
+    | '"' -> "&quot;"
+    | '&' -> "&amp;"
+    | '<' -> "&lt;"
+    | '>' -> "&gt;"
+    // FIXME: more?
+    | chr -> string chr
 
     type StringBuilder with
 
         member buf.AppendHtmlEscaped(str : string) =
-            let mapping = function
-            | '"' -> buf.Append("&quot;") |> ignore //"
-            | '&' -> buf.Append("&amp;")  |> ignore
-            | '<' -> buf.Append("&lt;")   |> ignore
-            | '>' -> buf.Append("&gt;")   |> ignore
-            | chr -> buf.Append(chr)      |> ignore
-            String.iter mapping str
+            String.iter (htmlEscape >> buf.Append >> ignore) str
+            buf
+
+        member buf.AppendAttrs(attrs : attributes, fn) =
+            attrs |> Map.iter (fun k v ->
+                    buf.Append(' ').Append(k) |> ignore
+                    match v with
+                    | Empty -> ()
+                    | value -> buf.Append("=\"").AppendHtmlEscaped(fn value).Append('"') |> ignore //"
+            )
             buf
 
         member buf.ToStringAndClear() =
@@ -25,7 +38,26 @@ module internal Extensions =
             result
 
     type TextReader with
-    
+
+        member tr.ConsumeUntil(pred) =
+            let rec loop() =
+                let next = tr.Peek()
+                let chr = char next
+                if next <> -1 && not(pred(chr)) then
+                    tr.Read() |> ignore
+                    loop()
+            loop()
+        member tr.ConsumeUntil(str : string) =
+            let rec loop() =
+                let mutable i = 0
+                while i < str.Length && Char.ToLowerInvariant(char(tr.Peek())) = Char.ToLowerInvariant(str.[i]) do
+                    ignore(tr.Read())
+                    i <- i + 1
+                if i < str.Length then
+                    ignore(tr.Read())
+                    loop()
+            loop()
+
         member tr.ReadUntil(pred) =
             let buf = StringBuilder()
             let rec loop() =
@@ -38,8 +70,8 @@ module internal Extensions =
             loop()
             buf.ToString()
     
-        member tr.ConsumeWhitespace() = tr.ReadUntil(Char.IsWhiteSpace >> not) |> ignore
-        member tr.ConsumeWhitespaceAnd(other) = tr.ReadUntil(fun c -> c <> other && not(Char.IsWhiteSpace(c))) |> ignore
+        member tr.ConsumeWhitespace() = tr.ConsumeUntil(Char.IsWhiteSpace >> not)
+        member tr.ConsumeWhitespaceAnd(other) = tr.ConsumeUntil(fun c -> c <> other && not(Char.IsWhiteSpace(c)))
         member inline tr.ConsumeIf(chr) =
             if Char.ToLowerInvariant(char(tr.Peek())) = Char.ToLowerInvariant(chr) then
                 ignore(tr.Read()); true
@@ -47,7 +79,7 @@ module internal Extensions =
         member tr.ConsumeIf(str : string) =
             let mutable i = 0
             while i < str.Length && Char.ToLowerInvariant(char(tr.Peek())) = Char.ToLowerInvariant(str.[i]) do
-                tr.Read() |> ignore
+                ignore(tr.Read())
                 i <- i + 1
             i >= str.Length
 
@@ -72,17 +104,19 @@ module internal Extensions =
                         loop()
                     | '$' when char(tr.Peek()) = '{' ->
                         tr.ConsumeWhitespaceAnd('{')
-                        let pred = fun c -> Char.IsWhiteSpace(c) || (match c with '}' | ':' | '<' -> true | _ -> false)
-                        let name = tr.ReadUntil(pred)
+                        let endChr = function '}' | ':' | '<' -> true | _ -> false
+                        let endChrOrWs = fun c -> Char.IsWhiteSpace(c) || endChr c
+                        let name = tr.ReadUntil(endChrOrWs)
                         tr.ConsumeWhitespace()
                         let ty =
                             if char(tr.Peek()) = ':' then
                                 tr.Read() |> ignore
                                 tr.ConsumeWhitespace()
-                                Type.forAbbr(tr.ReadUntil(pred))
+                                Some(tr.ReadUntil(endChrOrWs))
                             else
                                 None
-                        tr.ConsumeWhitespaceAnd '}' |> ignore
+                        tr.ConsumeUntil(endChr) // consume any whitespace
+                        tr.ConsumeIf '}' |> ignore
                         if buf.Length > 0 then
                             Run(buf.ToStringAndClear(), Binding(name, ty, loop()))
                         else

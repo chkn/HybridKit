@@ -37,7 +37,6 @@
     <Compile Include="ScriptObject.cs" />
     <Compile Include="CachedResources.cs" />
     <Compile Include="IWebView.cs" />
-    <Compile Include="ScriptableAttribute.cs" />
     <Compile Include="ScriptFunction.cs" />
     <Compile Include="Apps\HtmlView.cs" />
     <Compile Include="Tasks.cs" />

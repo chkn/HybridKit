@@ -1,0 +1,67 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectTypeGuids>{EFBA0AD7-5A72-4C68-AF49-83D382785DCF};{F2A71F9B-5D33-465A-A702-920D77279786}</ProjectTypeGuids>
+    <ProjectGuid>${ProjectGuid}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>${RootNamespace}</RootNamespace>
+    <MonoAndroidAssetsPrefix>Assets</MonoAndroidAssetsPrefix>
+    <MonoAndroidResourcePrefix>Resources</MonoAndroidResourcePrefix>
+    <AndroidResgenClass>Resource</AndroidResgenClass>
+    <AndroidResgenFile>Resources\Resource.designer.fs</AndroidResgenFile>
+    <AndroidApplication>True</AndroidApplication>
+    <AndroidUseLatestPlatformSdk>True</AndroidUseLatestPlatformSdk>
+    <AssemblyName>${ProjectName}</AssemblyName>
+    <TargetFrameworkVersion>v7.1</TargetFrameworkVersion>
+    <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
+    <TargetFrameworkProfile />
+    <AndroidManifest>Properties\AndroidManifest.xml</AndroidManifest>
+    <Name>${ProjectName}</Name>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>True</DebugSymbols>
+    <DebugType>Full</DebugType>
+    <Optimize>False</Optimize>
+    <OutputPath>${ScriptRelativePath}\bin\Debug</OutputPath>
+    <DefineConstants>DEBUG</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <AndroidLinkMode>None</AndroidLinkMode>
+    <ConsolePause>False</ConsolePause>
+    <Tailcalls>False</Tailcalls>
+    <PlatformTarget>
+    </PlatformTarget>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>PdbOnly</DebugType>
+    <DebugSymbols>True</DebugSymbols>
+    <Optimize>True</Optimize>
+    <OutputPath>${ScriptRelativePath}\bin\Release</OutputPath>
+    <ErrorReport>prompt</ErrorReport>
+    <PlatformTarget>
+    </PlatformTarget>
+    <AndroidUseSharedRuntime>False</AndroidUseSharedRuntime>
+    <ConsolePause>False</ConsolePause>
+    <Tailcalls>True</Tailcalls>
+  </PropertyGroup>
+  <Import Project="$(MSBuildExtensionsPath)\Xamarin\Android\Xamarin.Android.FSharp.targets" />
+  <ItemGroup>
+    <None Include="Properties\AndroidManifest.xml" />
+    <AndroidResource Include="Resources\drawable\Icon.png" />
+    <Compile Include="Resources\Resource.designer.fs" />
+    <Compile Include="${ScriptFile}" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="mscorlib" />
+    <Reference Include="FSharp.Core">
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Mono.Android" />
+    <Reference Include="Mono.Android.Export" />
+    <Reference Include="System" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Core" />
+  </ItemGroup>
+</Project>
