@@ -31,6 +31,12 @@
     <DocumentationFile>bin\Release\HybridKit.xml</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Apps\Bindings.cs" />
+    <Compile Include="Apps\Controller.cs" />
+    <Compile Include="Apps\HtmlPart.cs" />
+    <Compile Include="Apps\Interfaces.cs" />
+    <Compile Include="Apps\Updaters.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="JSON\JSON.cs" />
     <Compile Include="HybridKit.cs" />
     <Compile Include="ScriptException.cs" />
@@ -42,8 +48,6 @@
     <Compile Include="Tasks.cs" />
     <EmbeddedResource Include="HybridKit.js" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Properties\" />
-  </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\Portable\$(TargetFrameworkVersion)\Microsoft.Portable.CSharp.targets" />
 </Project>

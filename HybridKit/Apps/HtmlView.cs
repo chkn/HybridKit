@@ -1,136 +1,113 @@
 ﻿using System;
 using System.IO;
-using System.Linq;
-using System.Diagnostics;
-using System.Threading.Tasks;
+using System.Threading;
+using System.ComponentModel;
+using System.Text.RegularExpressions;
+using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 
 namespace HybridKit.Apps {
 
-	class Binding {
-		string currentValue;
+	/// <summary>
+	/// An <see cref="HtmlPart"/> that has a collection of updatable bindings. 
+	/// </summary>
+	public abstract class HtmlView : HtmlPart, INotifyPropertyChanged {
 
-		IWebView webView;
-		ScriptObject elements;
-		bool dirty;
+		// A child will inherit all parent's bindings
+		HtmlView parent;
 
-		public string Value => currentValue;
+		public BindingCollection Bindings { get; private set; }
 
-		public Binding (string initialValue)
+		/// <summary>
+		/// Raised when the value of a binding has changed.
+		/// </summary>
+		public event PropertyChangedEventHandler PropertyChanged;
+
+		public HtmlView ()
 		{
-			currentValue = initialValue;
+			Bindings = new BindingCollection (this);
+		}
+		public HtmlView (HtmlView parent): this ()
+		{
+			this.parent = parent;
 		}
 
-		public Task SetValue (string value)
+		void BindingInvalidated (object sender, EventArgs e) => Update ();
+		void BindingPropertyChanged (object sender, PropertyChangedEventArgs e)
 		{
-			if (value != currentValue) {
-				currentValue = value;
-				if (elements != null)
-					return ApplyValue ();
-				dirty = true;
-			}
-			return Tasks.Completed;
+			PropertyChanged?.Invoke (this, new PropertyChangedEventArgs (((IBinding)sender).Name));
 		}
 
-		public Task SetElements (IWebView webView, ScriptObject elements)
-		{
-			this.webView = webView;
-			this.elements = elements;
-			if (dirty && elements != null) {
-				dirty = false;
-				return ApplyValue ();
-			}
-			return Tasks.Completed;
-		}
+		public class BindingCollection : IEnumerable<IBinding>, INotifyCollectionChanged {
 
-		Task ApplyValue ()
-			=> webView.EvalAsync<string> ("function(a){{var i=a.length;while(i--)a[i].innerText={0};}}({1})", currentValue, elements);
-	}
+			static int nextInstanceId = 0;
+			const string IdPrefix = "__hk";
 
-	public class ExceptionEventArgs : EventArgs {
-		public Exception Exception { get; private set; }
-		public ExceptionEventArgs (Exception ex)
-		{
-			Exception = ex;
-		}
-	}
+			// http://stackoverflow.com/a/6732899/578190
+			static readonly Regex InvalidIdChars = new Regex (@"[\s\x00]");
 
-	public abstract class HtmlView {
+			// This ID is used to prefix all bindings for this instance
+			string instanceIdPrefix = IdPrefix + Interlocked.Add (ref nextInstanceId, 1) + "_";
 
-		const string IdPrefix = "_hkid_";
+			HtmlView view;
+			Dictionary<string, IBinding> bindings = new Dictionary<string, IBinding> ();
+			BindingCollection Parent => view.parent?.Bindings;
 
-		IWebView webView;
-		Dictionary<string,Binding> bindings = new Dictionary<string,Binding> ();
+			public event NotifyCollectionChangedEventHandler CollectionChanged;
 
-		bool wasRendered;
-		public bool IsRendered { get; private set; }
-		public event EventHandler<ExceptionEventArgs> ScriptException;
-
-		public async void SetBinding (string name, object value)
-		{
-			Binding binding;
-			var strValue = Convert.ToString (value); // FIXME: User-specified IFormatProvider?
-			try {
-				if (bindings.TryGetValue (name, out binding)) {
-					await binding.SetValue (strValue);
-				} else {
-					bindings.Add (name, binding = new Binding (strValue));
-					if (IsRendered)
-						await SetBindingElements (name, binding);
+			public IBinding this [string name] {
+				get {
+					IBinding result;
+					return bindings.TryGetValue (name, out result)? result : (Parent? [name]);
 				}
-			} catch (Exception ex) {
-				var handler = ScriptException;
-				if (handler != null)
-					handler (this, new ExceptionEventArgs (ex));
-				else
-					throw;
 			}
-		}
-		public string GetBinding (string name)
-		{
-			Binding binding;
-			return bindings.TryGetValue (name, out binding)? binding.Value : null;
-		}
 
-		public static string GetBindingId (string name) => IdPrefix + name;
-		protected abstract void RenderHtml (TextWriter writer);
+			internal BindingCollection (HtmlView view)
+			{
+				this.view = view;
+			}
 
-		public void Show (IWebView webView)
-		{
-			if (webView == null)
-				throw new ArgumentNullException (nameof (webView));
-			this.webView = webView;
-			Reload ();
-		}
+			/// <summary>
+			/// Returns an identifier for the given binding name suitable for use as an HTML class name.
+			/// </summary>
+			/// <param name="name">binding name</param>
+			/// <returns>identifier suitable for use as an HTML class name, or NULL if binding name was not found</returns>
+			public string GetId (string name)
+			{
+				return bindings.ContainsKey (name)? InvalidIdChars.Replace (instanceIdPrefix + name, "_") : Parent?.GetId (name);
+			}
 
-		protected void Reload ()
-		{
-			wasRendered = IsRendered;
-			IsRendered = false;
+			public void Add (IBinding binding) => Add (binding, true);
+			internal void Add (IBinding binding, bool handleInvalidation)
+			{
+				IBinding existing = null;
+				if (bindings.TryGetValue (binding.Name, out existing)) {
+					if (existing == binding)
+						return;
 
-			var htmlWriter = new StringWriter ();
-			RenderHtml (htmlWriter);
+					existing.Invalidated -= view.BindingInvalidated;
+					existing.PropertyChanged -= view.BindingPropertyChanged;
+				}
 
-			webView.Loaded += WebView_Loaded;
-			webView.LoadString (htmlWriter.ToString ());
-		}
+				bindings [binding.Name] = binding;
+				if (handleInvalidation)
+					binding.Invalidated += view.BindingInvalidated;
+				binding.PropertyChanged += view.BindingPropertyChanged;
 
-		async void WebView_Loaded (object sender, EventArgs e)
-		{
-			var curWebView = (IWebView)sender;
-			curWebView.Loaded -= WebView_Loaded;
+				var cc = CollectionChanged;
+				if (cc != null) {
+					var args = (existing == null)?
+						new NotifyCollectionChangedEventArgs (NotifyCollectionChangedAction.Add, binding)
+					  : new NotifyCollectionChangedEventArgs (NotifyCollectionChangedAction.Replace, binding, existing, 0);
+					cc (this, args);
+				}
+			}
 
-			// Get all the elements for all the bindings..
-			if (!wasRendered && webView == curWebView)
-				await Task.WhenAll (bindings.Select (kv => SetBindingElements (kv.Key, kv.Value)));
+			internal void Remove (IBinding binding) => bindings.Remove (binding.Name);
 
-			IsRendered = true;
-		}
-
-		async Task SetBindingElements (string name, Binding binding)
-		{
-			var elements = await webView.EvalAsync<ScriptObject> ("document.getElementsByClassName({0})", GetBindingId (name));
-			await binding.SetElements (webView, elements);
+			public IEnumerator<IBinding> GetEnumerator () => bindings.Values.GetEnumerator ();
+			IEnumerator IEnumerable.GetEnumerator () => GetEnumerator ();
 		}
 	}
 }

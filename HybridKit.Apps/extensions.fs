@@ -4,7 +4,10 @@ open System
 open System.IO
 open System.Text
 
-type attributes = Map<string,InterpolatedString>
+type attributes = Map<string,Interpolated>
+
+module internal Predicates =
+    let endElementToken c = c = '/' || c = '>' || Char.IsWhiteSpace(c)
 
 [<AutoOpen>]
 module internal Extensions =
@@ -17,25 +20,25 @@ module internal Extensions =
     // FIXME: more?
     | chr -> string chr
 
-    type StringBuilder with
+    type TextWriter with
 
-        member buf.AppendHtmlEscaped(str : string) =
-            String.iter (htmlEscape >> buf.Append >> ignore) str
-            buf
+        member wr.WriteHtmlEscaped(str : string) =
+            String.iter (htmlEscape >> wr.Write) str
 
-        member buf.AppendAttrs(attrs : attributes, fn) =
+        member wr.WriteAttrs(attrs : attributes, fn) =
             attrs |> Map.iter (fun k v ->
-                    buf.Append(' ').Append(k) |> ignore
-                    match v with
-                    | Empty -> ()
-                    | value -> buf.Append("=\"").AppendHtmlEscaped(fn value).Append('"') |> ignore //"
+                wr.Write(' ')
+                match v with
+                | Empty ->  wr.Write(k)
+                | Binding(TwoWay({ OmitAttribute = Some _ }), _, _, _) as value ->
+                    fn wr value
+                | value ->
+                    wr.Write(' ')
+                    wr.Write(k)
+                    wr.Write("=\"")
+                    fn wr value
+                    wr.Write('"')
             )
-            buf
-
-        member buf.ToStringAndClear() =
-            let result = buf.ToString()
-            buf.Clear() |> ignore
-            result
 
     type TextReader with
 
@@ -83,7 +86,7 @@ module internal Extensions =
                 i <- i + 1
             i >= str.Length
 
-        member tr.ReadAndHtmlUnescapeUntil(pred) =
+        member tr.ReadAndHtmlUnescapeUntil(pred, twoWayBindingInfo : TwoWayBindingInfo option) =
             let buf = StringBuilder()
             let rec loop() =
                 let next = tr.Peek()
@@ -99,37 +102,43 @@ module internal Extensions =
                         | 'a' -> if tr.ConsumeIf "amp;"  then buf.Append('&') |> ignore
                         | 'l' -> if tr.ConsumeIf "lt;"   then buf.Append('<') |> ignore
                         | 'g' -> if tr.ConsumeIf "gt;"   then buf.Append('>') |> ignore
-                        | _   -> () // FIXME: Silly people might just have an ampresand
-                                     // that's meant to be passed through.
+                        // FIXME: the rest of these
+                        | c when Char.IsWhiteSpace(c) -> buf.Append('&') |> ignore
+                        | _ -> ()
                         loop()
-                    | '$' when char(tr.Peek()) = '{' ->
-                        tr.ConsumeWhitespaceAnd('{')
-                        let endChr = function '}' | ':' | '<' -> true | _ -> false
-                        let endChrOrWs = fun c -> Char.IsWhiteSpace(c) || endChr c
-                        let name = tr.ReadUntil(endChrOrWs)
-                        tr.ConsumeWhitespace()
-                        let ty =
-                            if char(tr.Peek()) = ':' then
-                                tr.Read() |> ignore
-                                tr.ConsumeWhitespace()
-                                Some(tr.ReadUntil(endChrOrWs))
-                            else
-                                None
-                        tr.ConsumeUntil(endChr) // consume any whitespace
-                        tr.ConsumeIf '}' |> ignore
-                        if buf.Length > 0 then
-                            Run(buf.ToStringAndClear(), Binding(name, ty, loop()))
-                        else
-                            Binding(name, ty, loop())                            
+                    | '$' when char(tr.Peek()) = '{' -> readBinding Scalar
+                    | '@' when char(tr.Peek()) = '{' -> readBinding Vector
+                    | '{' when twoWayBindingInfo.IsSome -> readBinding (TwoWay twoWayBindingInfo.Value)
                     | _ ->
                         buf.Append(chr) |> ignore
                         loop()
+            and readBinding bindingType =
+                tr.ConsumeWhitespaceAnd('{')
+                let endChr = function '}' | ':' | '<' -> true | _ -> false
+                let endChrOrWs = fun c -> Char.IsWhiteSpace(c) || endChr c
+                let name = tr.ReadUntil(endChrOrWs)
+                tr.ConsumeWhitespace()
+                let ty =
+                    if char(tr.Peek()) = ':' then
+                        tr.Read() |> ignore
+                        tr.ConsumeWhitespace()
+                        Some(tr.ReadUntil(endChrOrWs))
+                    else
+                        None
+                tr.ConsumeUntil(endChr) // consume any whitespace
+                tr.ConsumeIf '}' |> ignore
+                if buf.Length > 0 then
+                    let text = buf.ToString()
+                    buf.Clear() |> ignore
+                    Run(text, Binding(bindingType, name, ty, loop()))
+                else
+                    Binding(bindingType, name, ty, loop()) 
             loop()
 
-        member tr.ReadHtmlQuotedString() =
+        member tr.ReadHtmlQuotedString(twoWayBindingInfo) =
             if tr.ConsumeIf '"' then // "
-                let result = tr.ReadAndHtmlUnescapeUntil((=) '"') // "
+                let result = tr.ReadAndHtmlUnescapeUntil((=) '"', None) // don't allow TwoWay bindings if string is quoted
                 tr.ConsumeIf '"' |> ignore //"
                 result
-            else
-                Empty
+            else // sloppy HTML can have unquoted attributes, or it could be a TwoWay binding
+                tr.ReadAndHtmlUnescapeUntil(Predicates.endElementToken, twoWayBindingInfo)

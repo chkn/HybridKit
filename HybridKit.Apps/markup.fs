@@ -7,24 +7,53 @@ open System.Collections.Generic
 
 type Node =
     | Elem of string * attributes * Node list
-    | Text of InterpolatedString
+    | Text of Interpolated
 
 type Declaration =
     | Doctype of string
     | XML of string
 
-type Tree = Tree of Declaration option * root:Node
-
-type VisitResponse =
-    | Ignore
-    | Visit
-    | Replace of Node list
+type Tree =
+    | Tree of Declaration option * root:Node
+    /// Converts the Tree to markup using a custom interpolator
+    member this.ToMarkup(wr : TextWriter, fn : TextWriter -> Interpolated -> unit) =
+        let (Tree(decl, root)) = this
+        match decl with
+        | None -> ()
+        | Some(Doctype doctype) ->
+            wr.Write("<!DOCTYPE ")
+            wr.Write(doctype)
+            wr.WriteLine('>')
+        | Some(XML xml) ->
+            wr.Write("<?xml ")
+            wr.Write(xml)
+            wr.WriteLine("?>")
+        let rec iter = function
+        | Text str -> fn wr str
+        | Elem (name, attrs, children) ->
+            wr.Write('<')
+            wr.Write(name)
+            wr.WriteAttrs(attrs, fn)
+            wr.Write('>')
+            children |> List.iter iter
+            wr.Write("</")
+            wr.Write(name)
+            wr.Write('>')
+        iter root
+    member this.ToMarkup(fn) =
+        use sw = new StringWriter()
+        this.ToMarkup(sw, fn)
+        sw.ToString()
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Tree =
 
     // FIXME: Fully implement escape/unescape
 
+    type VisitResponse =
+        | Ignore
+        | Visit
+        | Replace of Node list
     let visit fn (Tree(decl, root)) =
         let rec visitNode node =
             match fn node with
@@ -36,23 +65,8 @@ module Tree =
                 | other -> [other]
         Tree(decl, List.exactlyOne(visitNode root))
 
-    /// Converts the Tree to markup using a custom interpolator
-    let rec toMarkupI (fn : InterpolatedString -> string) (Tree(decl, root)) =
-        let buf = StringBuilder()
-        match decl with
-        | None -> ()
-        | Some(Doctype doctype) -> buf.Append("<!DOCTYPE ").Append(doctype).AppendLine(">") |> ignore
-        | Some(XML xml) -> buf.Append("<?xml ").Append(xml).AppendLine("?>") |> ignore
-        let rec iter = function
-        | Text str -> buf.AppendHtmlEscaped(fn str) |> ignore
-        | Elem (name, attrs, children) ->
-            buf.Append('<').Append(name).AppendAttrs(attrs, fn).Append('>') |> ignore
-            children |> List.iter iter
-            buf.Append("</").Append(name).Append('>') |> ignore
-        iter root
-        buf.ToString()
-
-    let toMarkup (fn : string -> string) = toMarkupI (fun istr -> istr.ToString(fn))
+    let toMarkupW (fn : TextWriter -> string -> unit) wr (tree : Tree) = tree.ToMarkup(wr, fun wr istr -> istr.ToString(wr, fn))
+    let toMarkup (fn : string -> string) (tree : Tree) = tree.ToMarkup(fun tw istr -> istr.ToString(tw, fn))
 
     let fromMarkupReader (root : string) (tr : TextReader) =
         let stack = Stack<Node>()
@@ -62,12 +76,13 @@ module Tree =
             match tr.Peek() with
             | -1 | 62(*'>'*) | 63(*'?'*) | 47(*/*) -> map
             | _ ->
-                let name = tr.ReadUntil (fun c -> c = '=' || c = '>' || Char.IsWhiteSpace(c))
+                let name = tr.ReadUntil (fun c -> c = '=' || c = '?' || Predicates.endElementToken c)
                 tr.ConsumeWhitespace()
                 let value =
-                    if tr.ConsumeIf '=' then
+                    let isOmission = tr.ConsumeIf '?'
+                    if isOmission || tr.ConsumeIf '=' then
                         tr.ConsumeWhitespace()
-                        tr.ReadHtmlQuotedString()
+                        tr.ReadHtmlQuotedString(Some { Property = name; OmitAttribute = if isOmission then Some name else None })
                     else
                         Empty
                 map
@@ -104,7 +119,7 @@ module Tree =
             if comment then tr.ConsumeUntil("-->") else
             tr.ConsumeWhitespace()
             let name =
-                let nm = tr.ReadUntil(fun c -> c = '>' || Char.IsWhiteSpace(c))
+                let nm = tr.ReadUntil(Predicates.endElementToken)
                 match decl with
                 | Some(XML _) -> nm
                 | _ -> nm.ToLowerInvariant()
@@ -135,7 +150,7 @@ module Tree =
 
         and readText() =
             //FIXME: Unescape things, etc.
-            let value = tr.ReadAndHtmlUnescapeUntil ((=) '<')
+            let value = tr.ReadAndHtmlUnescapeUntil ((=) '<', None)
             Text(value) |> stack.Push
             
         tr.ConsumeWhitespace()

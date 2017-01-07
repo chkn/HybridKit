@@ -6,7 +6,10 @@ type App  = NewApp
 type Home = HtmlView<__SOURCE_DIRECTORY__,"index.html">
 
 let home = Home()
-home.Headline <- "Todos"
-home.Todo <- "Baz"
+home.Headline <- "Hello"
+home.Todo <- "Bar"
+home.Completed <- true
 
-App.Run(home)
+home
+|> Controller
+|> App.Run

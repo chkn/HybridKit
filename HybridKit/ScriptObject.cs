@@ -102,6 +102,12 @@ namespace HybridKit {
 		/// <param name="args">Arguments to the function invocation.</param>
 		public Task<T> Invoke<T> (params object [] args) => Eval<T> (host, GetInvokeScript (args));
 
+		/// <summary>
+		/// Invokes this instance representing a JavaScript function that does not return a value.
+		/// </summary>
+		/// <param name="args">Arguments to the function invocation.</param>
+		public Task Invoke (params object [] args) => Eval (host, GetInvokeScript (args));
+
 		public TScriptObject InvokeLazy<TScriptObject> (params object [] args)
 			where TScriptObject : ScriptObject
 		{

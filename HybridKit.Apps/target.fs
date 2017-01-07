@@ -13,8 +13,6 @@ open FSharp.Core.CompilerServices
 open ProviderImplementation
 open ProviderImplementation.ProvidedTypes
 
-type Router = string -> HtmlView
-
 [<AutoOpen>]
 module internal Names =
     // Assembly names
@@ -27,7 +25,7 @@ module internal Names =
     let [<Literal>] AndroidActivity  = "hybridkit.android.App"
 
 type TargetKind =
-    | [<Arg("Runs a debug server that listens locally and opens your default browser (default)", "server")>] DebugServer
+    | [<Arg("Runs a debug server that listens locally (default, not for production use)", "server")>] DebugServer
     | [<Arg("Creates a Xamarin.Android app project")>] Android
     override this.ToString() =
         match this with
@@ -92,6 +90,7 @@ type Target(config : TypeProviderConfig, ?kind) =
             finally
                 AppDomain.CurrentDomain.remove_AssemblyResolve(resolveHandler)
 
+    // Load type info needed to create App type
     let appBaseType, registerType =
         match kind with
         | DebugServer -> typeof<DebugServerApp>, None
@@ -100,6 +99,9 @@ type Target(config : TypeProviderConfig, ?kind) =
             load XamarinAndroid   (fun asm -> Some(asm.GetType("Android.Runtime.RegisterAttribute")))
     let baseOnRunMethod =
         appBaseType.GetMethod("OnRun", BindingFlags.Public ||| BindingFlags.NonPublic ||| BindingFlags.Instance)
+    let controllerMethods =
+        appBaseType.GetMethods(BindingFlags.Public ||| BindingFlags.Instance ||| BindingFlags.DeclaredOnly)
+        |> Seq.filter (fun m -> m.Name = "SetController")
 
     member __.Kind = kind
 
@@ -116,52 +118,65 @@ type Target(config : TypeProviderConfig, ?kind) =
             }
             ty.AddCustomAttribute(cdata)
         | _ -> ()
-        // make a field to hold the router passed to App.Run
-        let routerField = ProvidedField("router", typeof<Router>)
-        routerField.SetFieldAttributes(FieldAttributes.Private ||| FieldAttributes.Static)
-        ty.AddMember(routerField)
         // ctor
         let ctor =
-            let basePathCtor ctor =
-                let args = [ProvidedParameter("basePath", typeof<string>); ProvidedParameter("isFsi", typeof<bool>)]
-                ProvidedConstructor(args, BaseConstructorCall = (fun args -> ctor, args))
             match kind with
-            | DebugServer -> basePathCtor debugServerAppCtor
-            | Android -> ProvidedConstructor([], BaseConstructorCall = (fun args -> appBaseType.GetConstructor([||]), args))
+            | DebugServer ->
+                let args = [ProvidedParameter("basePath", typeof<string>); ProvidedParameter("isFsi", typeof<bool>)]
+                ProvidedConstructor(args, BaseConstructorCall = (fun args -> debugServerAppCtor, args))
+            | Android ->
+                ProvidedConstructor([], BaseConstructorCall = (fun args -> appBaseType.GetConstructor([||]), args))
         ctor.InvokeCode <- fun _ -> <@@ () @@>
         ty.AddMember(ctor)
+
+        // fields for the various controller types
+        let controllerFields =
+            controllerMethods
+            |> Seq.map (fun m ->
+                let p = m.GetParameters().[0]
+                let pf = ProvidedField(p.Name, p.ParameterType)
+                pf.SetFieldAttributes(FieldAttributes.Private ||| FieldAttributes.Static)
+                m, pf)
+            |> Seq.toList
+        for _, fld in controllerFields do ty.AddMember(fld)
+
         // app.OnRun
-        let args = [ProvidedParameter("webView", typeof<IWebView>)]
-        let onRun = ProvidedMethod("OnRun", args, typeof<Void>)
+        let onRun = ProvidedMethod("OnRun", [], typeof<Void>)
         onRun.SetMethodAttrs((baseOnRunMethod.Attributes &&& MethodAttributes.MemberAccessMask) ||| MethodAttributes.Virtual ||| MethodAttributes.HideBySig)
         onRun.InvokeCode <- fun args ->
-            let webView =
+            let this =
                 match args with
-                | [_; arg] when arg.Type = typeof<IWebView> -> arg
-                | _ -> failwith "Unexpected args!"
-            let router = Expr.FieldGet(routerField)
-            <@@
-                let view = (%%router : Router) "/"
-                view.Show(%%webView)
-            @@>
-        ty.DefineMethodOverride(onRun, baseOnRunMethod)    
+                | [this] -> this
+                | _ -> failwithf "Unexpected args: %A" args
+            let rec checkFld = function
+            | [] -> <@@ failwith<unit> "App.Run was never called" @@>
+            | (mi : MethodInfo, fld) :: lst ->
+                let fldVal = Expr.FieldGet(fld)
+                let miCall = Expr.Call(Expr.Coerce(this, mi.DeclaringType), mi, [fldVal])
+                let fldVal = Expr.Coerce(fldVal, typeof<obj>)
+                Expr.IfThenElse(<@@ not(isNull %%fldVal) @@>, miCall, checkFld lst)
+            checkFld controllerFields
+        ty.DefineMethodOverride(onRun, baseOnRunMethod)
         ty.AddMember(onRun)
+
         // App.Run
-        let makeRunMethod args =
+        let makeRunMethod(mi : MethodInfo, fld : ProvidedField) =
+            let args =
+                mi.GetParameters()
+                |> Seq.map (fun p -> ProvidedParameter(p.Name, p.ParameterType))
+                |> Seq.toList
             let run = ProvidedMethod("Run", args, typeof<Void>)
             run.SetMethodAttrs(MethodAttributes.Public ||| MethodAttributes.Static)
             run.InvokeCode <- fun args ->
-                let router =
+                let storeArgs =
                     match args with
-                    | [view] when view.Type = typeof<HtmlView> -> <@@ fun (_:string) -> %%view : HtmlView @@>
-                    | [router] -> router
-                    | _ -> failwith "Unexpected arg count!"
+                    | [ctrlr] -> Expr.FieldSet(fld, ctrlr)
+                    | _ -> failwith "Unexpected args!"
                 let platInit =
                     match kind with
                     | DebugServer -> Expr.NewObject(ctor, [ Expr.Value(config.ResolutionFolder); Expr.Value(config.IsHostedExecution) ])
                     | Android -> <@@ () @@>
-                Expr.Sequential(Expr.FieldSet(routerField, router), platInit)
+                Expr.Sequential(storeArgs, platInit)
             ty.AddMember(run)
-        makeRunMethod [ProvidedParameter("view", typeof<HtmlView>)]
-        makeRunMethod [ProvidedParameter("router", typeof<Router>)]
+        List.iter makeRunMethod controllerFields
         ty

@@ -21,9 +21,17 @@ type TypeProvider(config : TypeProviderConfig) as this =
     let views = Dictionary<string,ViewTypeProvider>() // LOCK!
     let invalidateTrigger = new RateLimitedTrigger(Delay = TimeSpan.Zero)
 
+    let addToProvidedAsm (ty : ProvidedTypeDefinition) =
+        if not ty.IsErased then
+            let providedAsm =
+                Path.Combine(config.TemporaryFolder, Path.ChangeExtension("hk_" + Path.GetRandomFileName(), "dll"))
+                |> ProvidedAssembly
+            providedAsm.AddTypes([ty])
+
     do
         // First evaluate our launch environment
         let isRepl = FSI.isRepl config.IsHostedExecution
+        let warnOnNewBindings = isRepl && not config.IsInvalidationSupported
         let target =
             if config.IsHostedExecution && not isRepl then
                 match Cli.parseArgs<TargetKind>() with
@@ -34,21 +42,12 @@ type TypeProvider(config : TypeProviderConfig) as this =
             else
                 Target(config)
 
-        if not config.IsInvalidationSupported && isRepl then
-            printfn "NOTE: Type provider invalidation is not supported in this session."
-            printfn "You will need to re-evaluate HtmlView declarations and instantiations"
-            printfn "if you add new bindings to the associated HTML files."
-        else
+        if config.IsInvalidationSupported then
             invalidateTrigger.Triggered.Add(this.Invalidate)
         this.Disposing.Add(fun _ -> invalidateTrigger.Dispose())
 
+        // Now construct the types
         let asm = Assembly.GetExecutingAssembly()
-        let addToProvidedAsm (ty : ProvidedTypeDefinition) =
-            if not ty.IsErased then
-                let providedAsm =
-                    Path.Combine(config.TemporaryFolder, Path.ChangeExtension("hk_" + Path.GetRandomFileName(), "dll"))
-                    |> ProvidedAssembly
-                providedAsm.AddTypes([ty])
 
         let appType =
             let ty = target.CreateAppType(asm, nameSpace, "NewApp")
@@ -61,7 +60,6 @@ type TypeProvider(config : TypeProviderConfig) as this =
             let path =
                 match vals with
                 | [| :? string as path; :? string as fileName |] -> Path.Combine(path, fileName)
-                | [| :? string as path |] -> path
                 | _ -> failwith "impossible"
                 |> FS.resolvePath config.ResolutionFolder
                 |> Path.GetFullPath
@@ -70,7 +68,7 @@ type TypeProvider(config : TypeProviderConfig) as this =
                     match views.TryGetValue(path) with
                     | true, vp -> vp.CreateViewType(asm, nameSpace, typeName)
                     | _ ->
-                        let vp = ViewTypeProvider(target, invalidateTrigger, path)
+                        let vp = ViewTypeProvider(target, invalidateTrigger, path, warnOnNewBindings)
                         views.Add(path, vp)
                         vp.CreateViewType(asm, nameSpace, typeName)
                 addToProvidedAsm viewType

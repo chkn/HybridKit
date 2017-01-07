@@ -18,11 +18,6 @@ namespace HybridKit.Apps {
 
 	public abstract class App : Activity {
 
-		// We need this explicitly for the TP reflection
-		public App ()
-		{
-		}
-
 		protected override void OnCreate (Bundle savedInstanceState)
 		{
 			base.OnCreate (savedInstanceState);
@@ -34,12 +29,17 @@ namespace HybridKit.Apps {
 			var targetType = type.Assembly.GetTypes ().Single (ty => ty.FullName.StartsWith (targetTypePrefix, StringComparison.Ordinal));
 			RuntimeHelpers.RunClassConstructor (targetType.TypeHandle);
 
+			OnRun ();
+		}
+
+		protected abstract void OnRun ();
+
+		protected void SetController (Controller controller)
+		{
 			var webView = new HybridWebView (this);
 			webView.Settings.JavaScriptEnabled = true;
 			SetContentView (webView);
-			OnRun (webView);
+			controller.LoadView (webView);
 		}
-
-		protected abstract void OnRun (IWebView webView);
 	}
 }

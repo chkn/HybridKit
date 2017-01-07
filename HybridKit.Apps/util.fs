@@ -3,6 +3,7 @@
 open System
 open System.IO
 open System.Reflection
+open System.Threading.Tasks
 
 open FSharp.Quotations
 
@@ -62,3 +63,26 @@ module internal FSI =
 module internal Patterns =
 
     let inline (|ExprValue|) value = Expr.Value(value)
+
+[<AutoOpen>]
+module internal Async =
+
+    let ignoreAsync item = async { let! _ = item in () }
+
+    type Task<'t> with
+        member task.AsAsync = Async.AwaitTask(task)
+
+    type Task with
+        member task.AsAsync = Async.AwaitTask(task)
+
+module internal Map =
+    let keys map =
+        map
+        |> Map.toSeq
+        |> Seq.map fst
+        |> Seq.toList
+
+    let contains key value map =
+        map
+        |> Map.tryFind key
+        |> Option.exists ((=) value)
