@@ -92,28 +92,5 @@ HybridKit = {
 
 	toString: function (obj) {
 		return (obj != null) ? obj.toString() : null;
-	},
-
-	shadow: function () {
-	    if (!!Element.prototype.attachShadow) {
-	        if (console) console.log("HybridKit shadow using attachShadow");
-	        return function (host) { return host.attachShadow({ mode: "open" }); };
-	    }
-	    if (!!Element.prototype.createShadowRoot) {
-	        if (console) console.log("HybridKit shadow using createShadowRoot");
-	        return function (host) { return host.createShadowRoot(); };
-	    }
-	    if (!!Element.prototype.webkitCreateShadowRoot) {
-	        if (console) console.log("HybridKit shadow using webkitCreateShadowRoot");
-	        return function (host) { return host.webkitCreateShadowRoot(); };
-	    }
-	    if (console) console.log("HybridKit shadow is no op!");
-	    return function (host) { return host; };
-	}(),
-	embed: function (host, tplId) {
-	    var tpl = document.getElementById(tplId);
-	    var content = document.importNode(tpl.content, true);
-	    this.shadow(host).appendChild(content);
 	}
-
 };
