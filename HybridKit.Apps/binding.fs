@@ -28,7 +28,7 @@ module Types =
     let inline ofList types = { Types = types }
     let defaultTypes =
         ofList [
-            RegType("_",       WildcardType)    
+            RegType("_",       WildcardType)
             RegType("int",     ConcreteType typeof<int>)
             RegType("int64",   ConcreteType typeof<int64>)
             RegType("string",  ConcreteType typeof<string>)
@@ -86,13 +86,13 @@ module Binding =
             match bindingType, bty with
             | None, bty -> bindingType <- Some bty
             | Some bty1, bty2 when bty1 <> bty2 ->
-                failwithf "Found multiple declarations of binding `%s' with different binding types, `%A' and `%A'" name bty1 bty2
+                failwithf "Found multiple declarations of binding `%s' with conflicting binding types, `%A' and `%A'" name bty1 bty2
             | _, _ -> ()
             match Option.bind types.GetType pty with
             | Some pty ->
                 match mostSpecificType with
                 | Some sty when sty <> pty ->
-                    failwithf "Found multiple declarations of binding `%s' with different data types, `%s' and `%s'"
+                    failwithf "Found multiple declarations of binding `%s' with conflicting data types, `%s' and `%s'"
                     <| name
                     <| types.GetName(sty).Value
                     <| types.GetName(pty).Value

@@ -90,26 +90,30 @@ module Tree =
                 |> readAttrs
 
         let readDecl() =
-            tr.ConsumeWhitespaceAnd '<'
+            tr.ConsumeWhitespace()
+            let ateBracket = tr.ConsumeIf '<'
+            tr.ConsumeWhitespace()
             match char(tr.Peek()) with
             | '!' when tr.ConsumeIf "!doctype" ->
                 tr.ConsumeWhitespace()
                 let value = tr.ReadUntil((=) '>')
                 tr.ConsumeIf '>' |> ignore
-                Some(Doctype value)
+                Some(Doctype value), ateBracket
             | '?' when tr.ConsumeIf "?xml" ->
                 let value = tr.ReadUntil(function '?' | '>' -> true | _ -> false)
                 tr.ConsumeIf '?' |> ignore
                 tr.ConsumeIf '>' |> ignore
-                Some(XML value)
-            | _ -> None
+                Some(XML value), ateBracket
+            | _ -> None, ateBracket
 
-        let rec readTree(decl) =
+        let rec readTree(decl, implicitOpenBrace) =
             tr.ConsumeWhitespace()
             match tr.Peek() with
-            | -1        -> ()
-            | 60(*'<'*) -> readElem(decl); readTree(decl)
-            | _         -> readText(); readTree(decl)
+            | -1 -> ()
+            | 60(*'<'*) -> readElem(decl); readTree(decl, false)
+            | _ ->
+                if implicitOpenBrace then readElem(decl) else readText()
+                readTree(decl, false)
 
         and readElem(decl) =
             tr.ConsumeWhitespaceAnd '<'
@@ -166,7 +170,7 @@ module Tree =
                 Array.Reverse children
                 Elem(root, Map.empty, Array.toList children)
 
-        Tree(decl, root)
+        Tree(fst decl, root)
 
     let fromMarkupString root str = using (new StringReader(str)) (fromMarkupReader root)
     let fromMarkupFile root filePath = using (FS.openShared filePath) (fromMarkupReader root)

@@ -18,8 +18,8 @@ module internal View =
         let ctorWith (args : obj array) (ty : Type) =
             Some(ty.GetConstructor(Array.map (fun _ -> typeof<string>) args), args)
         match bty, pty with
-        | Scalar, ConcreteType ty   -> typedefof<ScalarBinding<_>>.MakeGenericType(ty) |> ctorWith [| name |]
-        | Vector, ConcreteType ty   -> typedefof<VectorBinding<_>>.MakeGenericType(ty) |> ctorWith [| name |]
+        | Scalar, ConcreteType ty -> typedefof<ScalarBinding<_>>.MakeGenericType(ty) |> ctorWith [| name |]
+        | Vector, ConcreteType ty -> typedefof<VectorBinding<_>>.MakeGenericType(ty) |> ctorWith [| name |]
         | TwoWay { OmitAttribute = attr }, ConcreteType ty ->
             typedefof<TwoWayBinding<_>>.MakeGenericType(ty) |> ctorWith [| name; (if attr.IsSome then attr.Value else null) |]
         | _, WildcardType -> None
