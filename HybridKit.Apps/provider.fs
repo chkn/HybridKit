@@ -64,13 +64,14 @@ type TypeProvider(config : TypeProviderConfig) as this =
                 |> FS.resolvePath config.ResolutionFolder
                 |> Path.GetFullPath
             lock (views) (fun () ->
-                let viewType =
+                let viewProvider =
                     match views.TryGetValue(path) with
-                    | true, vp -> vp.CreateViewType(asm, nameSpace, typeName)
+                    | true, vp -> vp
                     | _ ->
                         let vp = ViewTypeProvider(target, invalidateTrigger, path, warnOnNewBindings)
                         views.Add(path, vp)
-                        vp.CreateViewType(asm, nameSpace, typeName)
+                        vp
+                let viewType = viewProvider.CreateViewType(asm, nameSpace, typeName)
                 addToProvidedAsm viewType
                 viewType
             )

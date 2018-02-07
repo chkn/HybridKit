@@ -106,7 +106,7 @@ namespace HybridKit.Apps {
 			if (isAttribute && OmitAttributeName != null) {
 				if (isBool && !((bool)(object)Value))
 					return;
-				if (((object)Value) == null)
+				if (Value == null)
 					return;
 
 				writer.Write (OmitAttributeName);
@@ -115,6 +115,13 @@ namespace HybridKit.Apps {
 				writer.Write ('=');
 			}
 			base.WriteHtml (writer);
+		}
+	}
+
+	public class FunctionBinding : ScalarBinding<ScriptFunction> {
+
+		public FunctionBinding (string name): base (name)
+		{
 		}
 	}
 

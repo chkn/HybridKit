@@ -13,7 +13,9 @@ module internal FS =
         if Path.IsPathRooted(path) then path else Path.Combine(basePath, path)
 
     let createWatcher filePath =
-        new FileSystemWatcher(Path.GetDirectoryName(filePath), Path.GetFileName(filePath), NotifyFilter = NotifyFilters.LastWrite)
+        let watcher = new FileSystemWatcher(Path.GetDirectoryName(filePath), Path.GetFileName(filePath))
+        watcher.NotifyFilter <- NotifyFilters.LastWrite ||| NotifyFilters.Size ||| NotifyFilters.FileName ||| NotifyFilters.DirectoryName
+        watcher
 
     let openShared filePath =
         let stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)

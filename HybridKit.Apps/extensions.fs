@@ -12,6 +12,8 @@ module internal Predicates =
 [<AutoOpen>]
 module internal Extensions =
 
+    let inline (|Attr|_|) name attrs = Map.tryFind name attrs
+
     let htmlEscape = function
     | '"' -> "&quot;"
     | '&' -> "&amp;"
@@ -33,7 +35,6 @@ module internal Extensions =
                 | Binding(TwoWay({ OmitAttribute = Some _ }), _, _, _) as value ->
                     fn wr value
                 | value ->
-                    wr.Write(' ')
                     wr.Write(k)
                     wr.Write("=\"")
                     fn wr value
@@ -86,7 +87,7 @@ module internal Extensions =
                 i <- i + 1
             i >= str.Length
 
-        member tr.ReadAndHtmlUnescapeUntil(pred, twoWayBindingInfo : TwoWayBindingInfo option) =
+        member tr.ReadAndHtmlUnescapeUntil(pred, bindingType : BindingType option) =
             let buf = StringBuilder()
             let rec loop() =
                 let next = tr.Peek()
@@ -108,7 +109,7 @@ module internal Extensions =
                         loop()
                     | '$' when char(tr.Peek()) = '{' -> readBinding Scalar
                     | '@' when char(tr.Peek()) = '{' -> readBinding Vector
-                    | '{' when twoWayBindingInfo.IsSome -> readBinding (TwoWay twoWayBindingInfo.Value)
+                    | '{' when bindingType.IsSome    -> readBinding bindingType.Value
                     | _ ->
                         buf.Append(chr) |> ignore
                         loop()
@@ -135,10 +136,10 @@ module internal Extensions =
                     Binding(bindingType, name, ty, loop()) 
             loop()
 
-        member tr.ReadHtmlQuotedString(twoWayBindingInfo) =
+        member tr.ReadHtmlQuotedString(bindingType) =
             if tr.ConsumeIf '"' then // "
-                let result = tr.ReadAndHtmlUnescapeUntil((=) '"', None) // don't allow TwoWay bindings if string is quoted
+                let result = tr.ReadAndHtmlUnescapeUntil((=) '"', None) // don't allow TwoWay or Function bindings if string is quoted
                 tr.ConsumeIf '"' |> ignore //"
                 result
             else // sloppy HTML can have unquoted attributes, or it could be a TwoWay binding
-                tr.ReadAndHtmlUnescapeUntil(Predicates.endElementToken, twoWayBindingInfo)
+                tr.ReadAndHtmlUnescapeUntil(Predicates.endElementToken, bindingType)

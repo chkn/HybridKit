@@ -1,6 +1,7 @@
 ﻿namespace HybridKit.Apps
 
 open HybridKit.Apps.Markup
+open HybridKit.Apps.Markup.Tree
 
 open System
 open System.IO
@@ -14,6 +15,8 @@ open ProviderImplementation
 open ProviderImplementation.ProvidedTypes
 
 module internal View =
+
+    /// Returns the constructor and arguments to instantiate the runtime implementation of the given TypedBinding
     let getBindingCtor (TypedBinding(bty, name, pty)) =
         let ctorWith (args : obj array) (ty : Type) =
             Some(ty.GetConstructor(Array.map (fun _ -> typeof<string>) args), args)
@@ -22,14 +25,26 @@ module internal View =
         | Vector, ConcreteType ty -> typedefof<VectorBinding<_>>.MakeGenericType(ty) |> ctorWith [| name |]
         | TwoWay { OmitAttribute = attr }, ConcreteType ty ->
             typedefof<TwoWayBinding<_>>.MakeGenericType(ty) |> ctorWith [| name; (if attr.IsSome then attr.Value else null) |]
+        | Function, _ -> typeof<FunctionBinding> |> ctorWith [| name |]
         | _, WildcardType -> None
 
+    /// Extracts all viable <template> nodes, returning a filtered tree and a list of all found types
+    let extractSubtypes root types =
+        let mutable foundTypes = []
+        let rec visitor = function
+        | Elem("template", Attr "id" (Run(typeName, Empty)), _) as root when (Types.ofName typeName types).IsNone ->
+            foundTypes <- (typeName, root) :: foundTypes
+            Ignore
+        | _ -> Visit
+        (Node.visit visitor root), foundTypes
+
+/// The `HtmlView` base class used for the debug server target.
+///  Watches its given file for changes and automatically reloads.
 type DebugHtmlView(filePath : string, warnOnNewBindings : bool) as this =
     inherit HtmlView()
     let reload = new RateLimitedTrigger()
 
     let types = Types.defaultTypes // FIXME
-    let mutable bindings = []
     let loadBindings firstLoad =
         lock reload (fun _ ->
             let bindings =
@@ -95,35 +110,26 @@ type ViewTypeProvider(target : Target, invalidate : ITrigger, filePath : string,
     static let onRealizedMethod =
         typeof<HtmlView>.GetMethod("OnRealized", BindingFlags.Public ||| BindingFlags.Instance)
 
-    let mutable bindings = []
-    let mutable lastCreatedType = Unchecked.defaultof<_>
-
-    let loadBindings() =
-        Tree.fromMarkupFile "html" filePath
-        |> Binding.collectInTree
-
-    let localInvalidate = new RateLimitedTrigger()
-    do
-        localInvalidate.Triggered.Add(fun _ -> bindings <- loadBindings(); invalidate.Trigger())
+    let mutable rootType = Unchecked.defaultof<_>
 
     // Design-time watcher to invalidate the TP when the file is updated..
     let watcher = FS.createWatcher filePath
     do
-        watcher.Changed.Add(fun _ -> localInvalidate.Trigger())
+        watcher.Changed.Add(fun _ -> invalidate.Trigger())
         watcher.EnableRaisingEvents <- true
-        localInvalidate.Trigger()
 
-    let createType asm nameSpace name =
-        let baseType, baseCtorCall =
-            match target.Kind with
-            | DebugServer -> typeof<DebugHtmlView>, (fun args -> debugHtmlViewCtor, args@[ Expr.Value(filePath); Expr.Value(warnOnNewBindings) ])
-            | Android -> typeof<HtmlView>, (fun args -> htmlViewCtor, args)
+    let rec implementType (ty : ProvidedTypeDefinition) root (types : Types) =
 
-        let ty = ProvidedTypeDefinition(asm, nameSpace, name, Some baseType, IsErased = false)
+        // Find subtypes
+        (*
+        let subty = ProvidedTypeDefinition(typeName, Some baseType)
+            types <- Types.add (RegType(typeName, ConcreteType subty)) types
+            ty.AddMember(implementType subty root types)
+        
 
-        // FIXME: Find subtypes
-        let types = Types.defaultTypes
-
+        let filteredRoot = Node.visit findSubtypes root
+        *)
+        let bindings = Binding.collectInNode root
         // The OnRealized override will be responsible for adding updaters
         (*
         let onRealized = ProvidedMethod("OnRealized", [ProvidedParameter("webView", typeof<IWebView>)], typeof<Void>)
@@ -146,7 +152,7 @@ type ViewTypeProvider(target : Target, invalidate : ITrigger, filePath : string,
         let typedBindings = Binding.computeTypes types bindings
 
         let ctor = ProvidedConstructor(List.empty)
-        ctor.BaseConstructorCall <- baseCtorCall
+        //ctor.BaseConstructorCall <- baseCtorCall
         ctor.InvokeCode <- fun args ->
             let this =
                 match args with
@@ -179,8 +185,7 @@ type ViewTypeProvider(target : Target, invalidate : ITrigger, filePath : string,
         typedBindings
         |> List.iter (fun (TypedBinding(_, name, pty)) ->
             match pty with
-            | WildcardType -> ()
-            | ConcreteType pty ->
+            | ConcreteType pty when name <> "_" ->
                 let prop = ProvidedProperty(name, pty)
                 let nameExpr = Expr.Value(name)
                 let getBinding this =
@@ -202,6 +207,7 @@ type ViewTypeProvider(target : Target, invalidate : ITrigger, filePath : string,
                     let binding, value = getBinding this
                     Expr.PropertySet(binding, value, v)
                 ty.AddMember(prop)
+            | _ -> ()
         )
 
         // WriteHtml
@@ -266,8 +272,19 @@ type ViewTypeProvider(target : Target, invalidate : ITrigger, filePath : string,
             ty.AddMember(write)
         ty
 
-    member __.CreateViewType(asm, nameSpace, name) =
-        lastCreatedType <- createType asm nameSpace name
-        lastCreatedType
+    let createType asm nameSpace name =
+        let baseType, baseCtorCall =
+            match target.Kind with
+            | DebugServer -> typeof<DebugHtmlView>, (fun args -> debugHtmlViewCtor, args@[ Expr.Value(filePath); Expr.Value(warnOnNewBindings) ])
+            | Android -> typeof<HtmlView>, (fun args -> htmlViewCtor, args)
 
-    member __.LastCreatedType = lastCreatedType
+        let ty = ProvidedTypeDefinition(asm, nameSpace, name, Some baseType, IsErased = false)
+        let (Tree(_, root)) = Tree.fromMarkupFile "html" filePath
+        let types = Types.defaultTypes
+        implementType ty root types
+
+    member __.CreateViewType(asm, nameSpace, name) =
+        rootType <- createType asm nameSpace name
+        rootType
+
+    member __.RootType = rootType

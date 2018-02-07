@@ -96,7 +96,7 @@ type Target(config : TypeProviderConfig, ?kind) =
         | DebugServer -> typeof<DebugServerApp>, None
         | Android ->
             load HybridKitAndroid (fun asm -> asm.GetType("HybridKit.Apps.App")),
-            load XamarinAndroid   (fun asm -> Some(asm.GetType("Android.Runtime.RegisterAttribute")))
+            load XamarinAndroid   (fun asm -> asm.GetType("Android.Runtime.RegisterAttribute")) |> Some
     let baseOnRunMethod =
         appBaseType.GetMethod("OnRun", BindingFlags.Public ||| BindingFlags.NonPublic ||| BindingFlags.Instance)
     let controllerMethods =

@@ -8,7 +8,7 @@ namespace HybridKit {
 	public class ScriptFunction : IDisposable {
 
 		static uint nextId;
-		static readonly Dictionary<uint,ScriptFunction> functions = new Dictionary<uint, ScriptFunction> ();
+		static readonly Dictionary<uint,WeakReference> functions = new Dictionary<uint,WeakReference> (); // LOCK
 
 		object target;
 		MethodBase method;
@@ -24,7 +24,7 @@ namespace HybridKit {
 		{
 			lock (functions) {
 				Id = nextId++;
-				functions.Add (Id, this);
+				functions.Add (Id, new WeakReference (this));
 			}
 		}
 		public ScriptFunction (MethodBase method, object target = null): this ()
@@ -46,16 +46,33 @@ namespace HybridKit {
 
 		public void Dispose ()
 		{
+			Dispose (disposing: true);
+			GC.SuppressFinalize (this);
+		}
+		protected virtual void Dispose (bool disposing)
+		{
 			lock (functions)
 				functions.Remove (Id);
-			Disposed?.Invoke (this, EventArgs.Empty);
+			if (disposing)
+				Disposed?.Invoke (this, EventArgs.Empty);
+		}
+		~ScriptFunction()
+		{
+			Dispose (disposing: false);
 		}
 
 		public static ScriptFunction ById (uint id)
 		{
-			ScriptFunction result;
-			lock (functions)
-				return functions.TryGetValue (id, out result)? result : null;
+			WeakReference wr;
+			ScriptFunction func = null;
+			lock (functions) {
+				if (functions.TryGetValue (id, out wr)) {
+					func = wr.Target as ScriptFunction;
+					if (func == null)
+						functions.Remove (id);
+				}
+			}
+			return func;
 		}
 
 		/// <summary>

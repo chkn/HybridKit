@@ -8,8 +8,8 @@ type TwoWayBindingInfo = {
     Property:string
 
     /// If `Some`, gives the name of the attribute and indicates
-    ///  that this binding will be responsible for writing it iff
-    ///  its value isn't `false` or `None`
+    ///  that this binding will be responsible for writing both
+    ///  name and value iff its value isn't `false` or `None`
     OmitAttribute:string option
     }
 
@@ -17,11 +17,13 @@ type BindingType =
     | Scalar
     | Vector
     | TwoWay of TwoWayBindingInfo
+    | Function
     member this.Prefix =
         match this with
         | Scalar -> "$"
         | Vector -> "@"
-        | TwoWay _ -> ""
+        | TwoWay _
+        | Function -> ""
 
 /// Interpolated string.
 type Interpolated =
@@ -68,4 +70,5 @@ type Interpolated =
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Interpolated =
 
+    /// Creates an Interpolated from the given string.
     let inline istr str = Run(str, Empty)

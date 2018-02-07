@@ -45,16 +45,15 @@ type Tree =
         this.ToMarkup(sw, fn)
         sw.ToString()
 
+type VisitResponse =
+    | Ignore
+    | Visit
+    | Replace of Node list
+
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module Tree =
+module Node =
 
-    // FIXME: Fully implement escape/unescape
-
-    type VisitResponse =
-        | Ignore
-        | Visit
-        | Replace of Node list
-    let visit fn (Tree(decl, root)) =
+    let visit fn root =
         let rec visitNode node =
             match fn node with
             | Ignore -> [node]
@@ -63,31 +62,45 @@ module Tree =
                 match node with
                 | Elem(name, attrs, children) -> [Elem(name, attrs, List.collect visitNode children)]
                 | other -> [other]
-        Tree(decl, List.exactlyOne(visitNode root))
+        List.exactlyOne(visitNode root)
+
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module Tree =
+
+    // FIXME: Fully implement escape/unescape
+
+    let inline visit fn (Tree(decl, root)) = Tree(decl, Node.visit fn root)
 
     let toMarkupW (fn : TextWriter -> string -> unit) wr (tree : Tree) = tree.ToMarkup(wr, fun wr istr -> istr.ToString(wr, fn))
-    let toMarkup (fn : string -> string) (tree : Tree) = tree.ToMarkup(fun tw istr -> istr.ToString(tw, fn))
+    let toMarkup (fn : string -> string) (tree : Tree) = tree.ToMarkup(fun wr istr -> istr.ToString(wr, fn))
 
     let fromMarkupReader (root : string) (tr : TextReader) =
         let stack = Stack<Node>()
 
-        let rec readAttrs (map : attributes) =
+        let rec readAttrs decl (map : attributes) =
             tr.ConsumeWhitespace()
             match tr.Peek() with
             | -1 | 62(*'>'*) | 63(*'?'*) | 47(*/*) -> map
             | _ ->
-                let name = tr.ReadUntil (fun c -> c = '=' || c = '?' || Predicates.endElementToken c)
+                let name =
+                    let nm = tr.ReadUntil (fun c -> c = '=' || c = '?' || Predicates.endElementToken c)
+                    match decl with
+                    | Some(XML _) -> nm
+                    | _ -> nm.ToLowerInvariant()
                 tr.ConsumeWhitespace()
                 let value =
                     let isOmission = tr.ConsumeIf '?'
                     if isOmission || tr.ConsumeIf '=' then
                         tr.ConsumeWhitespace()
-                        tr.ReadHtmlQuotedString(Some { Property = name; OmitAttribute = if isOmission then Some name else None })
+                        let bindingType =
+                            if name.StartsWith("on", StringComparison.Ordinal) then Function else
+                            TwoWay { Property = name; OmitAttribute = if isOmission then Some name else None }
+                        tr.ReadHtmlQuotedString(Some bindingType)
                     else
                         Empty
                 map
                 |> Map.add name value
-                |> readAttrs
+                |> readAttrs decl
 
         let readDecl() =
             tr.ConsumeWhitespace()
@@ -128,7 +141,7 @@ module Tree =
                 | Some(XML _) -> nm
                 | _ -> nm.ToLowerInvariant()
             if not(String.IsNullOrEmpty(name)) then
-                let attrs = readAttrs Map.empty
+                let attrs = readAttrs decl Map.empty
                 tr.ConsumeIf '/' |> ignore
                 tr.ConsumeIf '>' |> ignore
                 if closing then

@@ -1,27 +1,42 @@
 ﻿
 open Expecto
-
+open HybridKit
 open HybridKit.Apps.Markup
+
+open System.IO
+open System.Reflection
 
 let types = Types.defaultTypes
 
-let loadBindings html =
+let roundtripTestCase types (RegType(nm, ty)) =
+    testCase nm <| fun () ->
+        Expect.equal (Types.toName ty types) (Some nm) "wrong name"
+        Expect.equal (Types.ofName nm types) (Some ty) "wrong type"
+        match ty with
+        | WildcardType -> ()
+        | ConcreteType typ ->
+            let optionType = ConcreteType(typedefof<option<_>>.MakeGenericType(typ))
+            let optionName = nm + " option"
+            Expect.equal (Types.toName optionType types) (Some optionName) "wrong option name"
+            Expect.equal (Types.ofName optionName types) (Some optionType) "wrong option type"
+
+[<Tests>]
+let typesTests =
+    types
+    |> Types.map (roundtripTestCase types)
+    |> testList "Types roundtrip tests"
+
+let loadAndTypeBindings html =
     Tree.fromMarkupString "html" html
     |> Binding.collectInTree
-
-let typeBindings = Binding.computeTypes types
+    |> Binding.computeTypes types
 
 let expectBindings expected html =
-    let actual =
-        loadBindings html
-        |> typeBindings
-    Expect.sequenceEqual actual expected (sprintf "expected %A, but got %A" expected actual) 
+    let actual = loadAndTypeBindings html
+    Expect.sequenceEqual actual expected "wrong bindings" 
 
 let expectBindingFailure msg html =
-    let test() =
-        loadBindings html
-        |> typeBindings
-        |> ignore
+    let test() = loadAndTypeBindings html |> ignore
     Expect.throwsC test (fun e -> Expect.stringContains e.Message msg "wrong message")
 
 [<Tests>]
@@ -38,6 +53,10 @@ let bindingDeclTests =
         testCase "throws error for conflicting data types" <| fun () ->
             @"${Foo : string} ${Foo : int}"
             |> expectBindingFailure "Found multiple declarations of binding `Foo' with conflicting data types, `int' and `string'"
+
+        testCase "throws error for invalid data types" <| fun () ->
+            @"${Foo : _ option}"
+            |> expectBindingFailure "asdf"
 
         testCase "throws error for conflicting binding types" <| fun () ->
             @"${Foo} @{Foo}"
@@ -62,7 +81,36 @@ let bindingDeclTests =
         testCase "WildcardType binding" <| fun () ->
             @"${Foo : _}"
             |> expectBindings [TypedBinding(Scalar, "Foo", WildcardType)]
+
+        testCase "function binding" <| fun () ->
+            @"<button onclick={Handler}>Click me</button>"
+            |> expectBindings [TypedBinding(Function, "Handler", ConcreteType(typeof<unit -> unit>))]
     ]
+
+let expectHtml html (view : HybridKit.Apps.IHtmlWriter) =
+    let actual = using (new StringWriter()) (fun wr -> view.WriteHtml(wr); wr.ToString())
+    Expect.equal actual html "wrong html"
+
+let expectDoesNotHaveProp<'t> name =
+    let hasProp =
+        typeof<'t>.GetProperties(BindingFlags.Public ||| BindingFlags.Instance)
+        |> Seq.map (fun p -> p.Name)
+        |> Seq.contains name
+    Expect.isFalse hasProp (sprintf "shouldn't have property: %s" name)
+
+type ScalarBindingView = HtmlView<"html/scalarbinding.html">
+let [<Tests>] scalarBindingView =
+    testCase "scalar binding view" <| fun () ->
+        ScalarBindingView(Foo = "hello")
+        |> expectHtml @"<p><span class=""__hk1_Foo"">hello</span></p>"
+
+type TemplateBindingView = HtmlView<"html/templatebinding.html">
+let [<Tests>] templateBindingView =
+    testCase "template binding view" <| fun () ->
+        expectDoesNotHaveProp<TemplateBindingView> "_"
+        // assert that there is a nested class for each template
+        TemplateBindingView()
+        |> expectHtml @"<html><template id=""Tpl1""><b>hello</b></template><template id=""Tpl2""><i>goodbye</i></template><p><b>hello</b><i>goodbye</i></p></html>"
 
 [<EntryPoint>]
 let main argv = runTestsInAssembly defaultConfig argv

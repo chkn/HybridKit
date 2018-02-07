@@ -17,13 +17,23 @@ type TypedBinding = TypedBinding of BindingType * name:string * TypeValue
 type RegType = RegType of string * TypeValue
 
 type Types = { Types : RegType list } with
-    member this.GetType(nm1 : string) =
-        List.tryPick (function RegType(nm2, ty) when nm1 = nm2 -> Some ty | _ -> None) this.Types
+    member this.GetType(nm : string) =
+        let isOption = nm.EndsWith("option", StringComparison.Ordinal)
+        let nm1 = if isOption then nm.Substring(0, nm.Length - "option".Length).Trim() else nm
+        let ty  = List.tryPick (function RegType(nm2, ty) when nm1 = nm2 -> Some ty | _ -> None) this.Types
+        match isOption, ty with
+        | true, Some(ConcreteType ty) -> typedefof<option<_>>.MakeGenericType(ty) |> ConcreteType |> Some
+        | true, _ -> None
+        | false, ty -> ty
     member this.GetName(ty1 : TypeValue) =
         List.tryPick (function RegType(nm, ty2) when ty1 = ty2 -> Some nm | _ -> None) this.Types
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Types =
+    let inline ofName nm (types : Types) = types.GetType(nm)
+    let inline toName ty (types : Types) = types.GetName(ty)
+    let inline iter fn { Types = types } = List.iter fn types
+    let inline map fn { Types = types }  = List.map fn types
     let inline add typ types = { types with Types = typ :: types.Types }
     let inline ofList types = { Types = types }
     let defaultTypes =
@@ -42,7 +52,7 @@ module Types =
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Binding =
 
-    /// The default inferred type for the given binding type,
+    /// The default inferred type for a binding,
     ///  assuming no other annotation or context is present.
     let defaultType = ConcreteType(typeof<string>)
 
@@ -66,13 +76,15 @@ module Binding =
     | Binding(bt, name, ty, next) as binding ->
         collectInString parent (BindingInTree(bt, name, ty, parent) :: lst) next
 
-    let rec collectInNode parent lst = function
-    | Text(str) -> collectInString parent lst str
-    | Elem(elemName, attrs, children) ->
-        let lst = Map.fold (fun lst attrName -> collectInString (Attribute(attrName, elemName, attrs)) lst) lst attrs
-        Seq.fold (collectInNode (Element(elemName, attrs))) lst children
+    let collectInNode node =
+        let rec collect parent lst = function
+        | Text(str) -> collectInString parent lst str
+        | Elem(elemName, attrs, children) ->
+            let lst = Map.fold (fun lst attrName -> collectInString (Attribute(attrName, elemName, attrs)) lst) lst attrs
+            Seq.fold (collect (Element(elemName, attrs))) lst children
+        collect NoParent [] node
 
-    let inline collectInTree (Tree(_,root)) = collectInNode NoParent [] root
+    let inline collectInTree (Tree(_,root)) = collectInNode root
 
     /// Given a list of references to the same binding,
     ///  attempts to infer an overall type for the binding.
@@ -82,14 +94,21 @@ module Binding =
         let mutable mostSpecificType = None
         let mutable mostProbableType = None
         for (BindingInTree(bty, name, pty, parent)) in dupeBindings do
-            // FIXME: TwoWay bindings should be usable as scalar bindings elsewhere
             match bindingType, bty with
-            | None, bty -> bindingType <- Some bty
+            // TwoWay bindings can be used as scalar...
+            | Some Scalar, TwoWay _
+            | None, _ -> bindingType <- Some bty
+            // ...but type the binding as TwoWay, not Scalar
+            | Some(TwoWay _), Scalar -> ()
             | Some bty1, bty2 when bty1 <> bty2 ->
                 failwithf "Found multiple declarations of binding `%s' with conflicting binding types, `%A' and `%A'" name bty1 bty2
             | _, _ -> ()
-            match Option.bind types.GetType pty with
+            match pty with
             | Some pty ->
+                let pty = 
+                    match Types.ofName pty types with
+                    | None -> failwithf "Binding `%s' has invalid type, `%s'" name pty
+                    | Some pty -> pty
                 match mostSpecificType with
                 | Some sty when sty <> pty ->
                     failwithf "Found multiple declarations of binding `%s' with conflicting data types, `%s' and `%s'"
@@ -130,7 +149,7 @@ module Binding =
 
     let createElements getId node =
         let rec visitText = function
-        | ExtractBinding(before, Some(Binding(bt, nm, ty, next))) ->
+        | ExtractBinding(before, Some(Binding(bt, nm, ty, next))) when nm <> "_" ->
             let result = [
                 Text(before)
                 Elem("span", Map.ofList [ "class", Run(getId nm, Empty) ], [ Text(Interpolated.Binding(bt, nm, ty, Empty)) ])
