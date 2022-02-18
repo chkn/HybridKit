@@ -1,3 +1,5 @@
+**THIS PROJECT IS UNMAINTAINED AND SHOULD NOT BE USED. [Blazor Hybrid](https://docs.microsoft.com/en-us/aspnet/core/blazor/hybrid/?view=aspnetcore-6.0) is a similar concept and currently under active development.**
+
 # HybridKit
 
 Simple C# – JavaScript bridge for building hybrid iOS and Android apps.
